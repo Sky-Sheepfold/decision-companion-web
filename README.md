@@ -79,3 +79,7 @@ npm run build
 - 响应式布局
 - 流畅的动画效果
 - 中文优先（Noto Serif SC + Noto Sans SC）
+
+## License
+
+MIT
