@@ -1,13 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ChatPage } from './pages/ChatPage'
+import { OnboardingPage } from './pages/OnboardingPage'
+import { ProfilePage } from './pages/ProfilePage'
+import './styles/global.css'
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/chat" replace />} />
-        <Route path="/chat" element={<div>对话页面 - 待开发</div>} />
-        <Route path="/onboarding" element={<div>冷启动页面 - 待开发</div>} />
-        <Route path="/profile" element={<div>档案页面 - 待开发</div>} />
+        <Route path="/" element={<Navigate to="/onboarding" replace />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Routes>
     </BrowserRouter>
   )
