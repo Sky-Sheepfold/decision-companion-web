@@ -69,5 +69,9 @@ export default defineConfig([
       // other options...
     },
   },
-])
+  ])
 ```
+
+## License
+
+MIT
