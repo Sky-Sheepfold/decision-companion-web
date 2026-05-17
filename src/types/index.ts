@@ -6,13 +6,15 @@ export interface User {
   createdAt: string;
 }
 
+export type Evidence = string[] | string | Record<string, unknown> | null;
+
 export interface ProfileValues {
   id: number;
   userId: number;
   item: string;
   preference: string;
   confidence: number;
-  evidence: string[];
+  evidence: Evidence;
   updatedAt: string;
 }
 
@@ -57,7 +59,7 @@ export interface ProfileFear {
   description: string;
   manifestation: string;
   confidence: number;
-  evidence: string[];
+  evidence: Evidence;
   boundaryType?: 'hard' | 'soft';
   updatedAt: string;
 }
