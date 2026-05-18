@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Layout, Drawer, Alert } from 'antd';
 import { useChatStore } from '../stores/chatStore';
 import { useProfileStore } from '../stores/profileStore';
@@ -20,20 +19,13 @@ const INITIAL_MESSAGE = {
 };
 
 export function ChatPage() {
-  const navigate = useNavigate();
-  const { messages, isStreaming, error, sessionId, sendMessage, initSession } = useChatStore();
+  const { messages, isStreaming, error, sendMessage } = useChatStore();
   const { profile, fetchProfile } = useProfileStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    initSession();
-  }, [initSession]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-
     if (!hasInitialized.current) {
       hasInitialized.current = true;
       if (messages.length === 0) {
@@ -42,34 +34,30 @@ export function ChatPage() {
         }));
       }
     }
-  }, [messages.length, sessionId]);
+  }, [messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    if (!sessionId) return;
     void fetchProfile();
-  }, [fetchProfile, sessionId]);
+  }, [fetchProfile]);
 
   useEffect(() => {
-    if (!sessionId || isStreaming || messages.length <= 1) return;
+    if (isStreaming || messages.length <= 1) return;
     const timer = window.setTimeout(() => {
       void fetchProfile();
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [fetchProfile, isStreaming, messages.length, sessionId]);
+  }, [fetchProfile, isStreaming, messages.length]);
 
   const contextSummary = useMemo(() => buildContextSummary(messages, profile), [messages, profile]);
   const shouldShowTyping = isStreaming && messages[messages.length - 1]?.role === 'assistant' && !messages[messages.length - 1]?.content.trim();
+  const hasUserMessages = messages.some((message) => message.role === 'user');
 
   const handleSend = async (text: string) => {
-    if (!sessionId) {
-      navigate('/onboarding');
-      return;
-    }
     await sendMessage(text);
 
     const chatCount = parseInt(sessionStorage.getItem('chatCount') || '0', 10);
@@ -77,9 +65,9 @@ export function ChatPage() {
   };
 
   return (
-    <Layout className="page-fade h-[100dvh] overflow-hidden bg-[#F7F2EC]" hasSider>
+    <Layout className="chat-root page-fade" hasSider>
       {/* PC Sider - Standard History Sidebar */}
-      <Sider width={232} breakpoint="lg" collapsedWidth="0" trigger={null} className="hidden lg:block !bg-[#F8F3ED] border-r border-[#E8D8C8] z-10">
+      <Sider width={240} breakpoint="lg" collapsedWidth="0" trigger={null} className="chat-left-sider hidden lg:block">
         <Sidebar />
       </Sider>
 
@@ -96,17 +84,16 @@ export function ChatPage() {
         <Sidebar className="h-full bg-[var(--color-header-bg)]" />
       </Drawer>
 
-      <Layout className="bg-transparent flex flex-col h-[100dvh]">
+      <Layout className="chat-app-area">
         <ChatHeader
           showMenuButton
           onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
-        <Layout className="flex-1 overflow-hidden flex flex-row bg-transparent">
-          {/* Main Chat Canvas */}
-          <Content className="flex-1 flex flex-col h-full bg-[#FFFCF8] relative">
-            <div className="flex-1 overflow-y-auto px-5 py-6 custom-scrollbar md:px-8">
-              <div className="mx-auto w-full max-w-[760px] space-y-5">
+        <div className="chat-board">
+          <Content className="chat-conversation-card">
+            <div className="chat-thread-scroll custom-scrollbar">
+              <div className="chat-thread">
                 <ChatContextBar summary={contextSummary} />
 
                 {messages.map((msg, idx) => (
@@ -115,11 +102,17 @@ export function ChatPage() {
                     : <MessageBubble key={idx} message={msg} />
                 ))}
 
+                {!hasUserMessages && !isStreaming && (
+                  <DecisionStarterPanel onPick={handleSend} />
+                )}
+
                 {shouldShowTyping && (
                   <div className="message-enter flex gap-3">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[#E9D8C8] bg-white text-[12px] font-medium text-[#7A634F] shadow-sm">
-                      伴
-                    </div>
+                    <img
+                      className="h-8 w-8 flex-shrink-0 rounded-full border border-[#E9D8C8] bg-white object-cover shadow-sm"
+                      src="/decision-companion-logo.png"
+                      alt="决策伙伴正在输入"
+                    />
                     <div className="rounded-[0_14px_14px_14px] bg-white px-4 py-2.5 shadow-sm border border-[#E9D8C8]">
                       <TypingIndicator />
                     </div>
@@ -128,7 +121,7 @@ export function ChatPage() {
 
                 {error && (
                   <Alert
-                    message={error}
+                    title={error}
                     type="error"
                     showIcon
                     className="rounded-[var(--radius-md)]"
@@ -141,24 +134,48 @@ export function ChatPage() {
               </div>
             </div>
 
-            {/* Float Input Area */}
-            <div className="flex-shrink-0 border-t border-[#EFE2D6]/70 bg-[#FFFCF8]/92 px-5 py-4 backdrop-blur md:px-8">
-              <div className="mx-auto w-full max-w-[760px]">
+            <div className="chat-composer-shell">
+              <div className="chat-composer-inner">
                 <ChatInput onSend={handleSend} disabled={isStreaming} />
-                <div className="mt-2 text-center text-[11px] text-[#B09880]">
+                <div className="chat-composer-note">
                   只记录足够稳定的理解；不确定的部分会继续观察。
                 </div>
               </div>
             </div>
           </Content>
 
-          {/* Right Knowledge/Profile Sider (The Paradigm Shift) */}
-          <Sider width={328} className="hidden xl:block bg-transparent" trigger={null}>
+          <aside className="chat-memory-rail">
             <MemoryCompass />
-          </Sider>
-        </Layout>
+          </aside>
+        </div>
       </Layout>
     </Layout>
+  );
+}
+
+function DecisionStarterPanel({ onPick }: { onPick: (text: string) => void }) {
+  const suggestions = [
+    '我有点乱，想先说说',
+    '帮我梳理一个职业选择',
+    '我想复盘一次过去的决定',
+    '有个关系问题让我卡住了',
+  ];
+
+  return (
+    <section className="chat-starter-panel">
+      <div>
+        <span>可以从这里开始</span>
+        <strong>把脑子里的结先放到桌面上。</strong>
+        <p>你不需要一次说完整，我会先听，再慢慢帮你拆出价值、情绪、关系和边界。</p>
+      </div>
+      <div className="chat-starter-actions">
+        {suggestions.map((suggestion) => (
+          <button key={suggestion} type="button" onClick={() => onPick(suggestion)}>
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -171,20 +188,20 @@ interface ContextSummary {
 
 function ChatContextBar({ summary }: { summary: ContextSummary }) {
   return (
-    <div className="rounded-lg border border-[#E9D8C8] bg-[#FFF8F1] px-3.5 py-2.5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#F0DFC8] px-2.5 py-0.5 text-[12px] font-medium text-[#8B5737]">
+    <section className="chat-context-card">
+      <div className="chat-context-main">
+        <div className="chat-context-copy">
+          <div className="chat-context-title-row">
+            <span className="chat-mode-pill">
               {summary.mode}
             </span>
-            <span className="truncate text-[13px] font-medium text-[#4A3C31]">
+            <strong>
               {summary.focus}
-            </span>
+            </strong>
           </div>
-          <div className="text-[12px] text-[#9B8069]">{summary.note}</div>
+          <p>{summary.note}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-1">
+        <div className="chat-recall-list">
           {summary.recallItems.length > 0 ? summary.recallItems.map((item) => (
             <span key={item.label} className={`rounded-full border px-2 py-0.5 text-[12px] ${item.tone}`}>
               {item.label} {item.count}
@@ -196,7 +213,7 @@ function ChatContextBar({ summary }: { summary: ContextSummary }) {
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 

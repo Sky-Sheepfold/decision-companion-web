@@ -13,7 +13,7 @@ export function ChatHeader({ showMenuButton = false, onMenuClick }: ChatHeaderPr
   const navigate = useNavigate();
 
   return (
-    <header className="flex min-h-[56px] items-center justify-between border-b border-[#E8D8C8] bg-[#FFFCF8] px-4 py-2.5 md:px-6 z-10 relative">
+    <header className="chat-topbar">
       <Space size="middle" className="min-w-0">
         {showMenuButton && (
           <Button

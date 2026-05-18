@@ -6,36 +6,18 @@ interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
   error: string | null;
-  sessionId: string | null;
   sendMessage: (text: string) => Promise<void>;
   clearMessages: () => void;
-  setSessionId: (sessionId: string) => void;
-  initSession: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isStreaming: false,
   error: null,
-  sessionId: null,
-
-  initSession: () => {
-    let sessionId = sessionStorage.getItem('sessionId');
-    if (!sessionId) {
-      sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
-      sessionStorage.setItem('sessionId', sessionId);
-    }
-    set({ sessionId });
-  },
-
-  setSessionId: (sessionId: string) => {
-    sessionStorage.setItem('sessionId', sessionId);
-    set({ sessionId });
-  },
 
   sendMessage: async (text: string) => {
-    const { sessionId, isStreaming } = get();
-    if (!text.trim() || !sessionId || isStreaming) return;
+    const { isStreaming } = get();
+    if (!text.trim() || isStreaming) return;
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -59,7 +41,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const response = await agentApi.chatStream(sessionId, text);
+      const response = await agentApi.chatStream(text);
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let pendingChunk = '';

@@ -20,12 +20,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   chatCount: 0,
 
   fetchProfile: async () => {
-    const sessionId = sessionStorage.getItem('sessionId');
-    if (!sessionId) return;
-
     try {
       set({ loading: true, error: null });
-      const data = await profileApi.getFullProfile(sessionId);
+      const data = await profileApi.getFullProfile();
       
       const allItems = [
         ...(data.values || []),

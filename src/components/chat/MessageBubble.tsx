@@ -22,12 +22,14 @@ export function MessageBubble({ message, showAvatar = true }: MessageBubbleProps
       {showAvatar && (
         <Avatar
           size={34}
+          src={isUser ? undefined : '/decision-companion-logo.png'}
+          alt={isUser ? '你' : '决策伙伴'}
           className={`
             mt-0.5 flex-shrink-0 flex items-center justify-center text-[12px] font-medium
             ${isUser ? 'bg-[#C8845A] text-white' : 'bg-white text-[#7A634F] border border-[#E9D8C8] shadow-sm'}
           `}
         >
-          {isUser ? '你' : '伴'}
+          {isUser ? '你' : null}
         </Avatar>
       )}
 

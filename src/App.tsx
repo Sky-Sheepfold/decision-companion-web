@@ -1,8 +1,12 @@
+import { useEffect, useState, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { App as AntApp, ConfigProvider } from 'antd'
+import { App as AntApp, ConfigProvider, Spin } from 'antd'
 import { ChatPage } from './pages/ChatPage'
+import { LoginPage } from './pages/LoginPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { RegisterPage } from './pages/RegisterPage'
+import { useAuthStore } from './stores/authStore'
 import './styles/global.css'
 
 function App() {
@@ -33,16 +37,45 @@ function App() {
     >
       <AntApp>
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Navigate to="/onboarding" replace />} />
-            <Route path="/onboarding" element={<OnboardingPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
       </AntApp>
     </ConfigProvider>
   )
+}
+
+function AppRoutes() {
+  const { user, initAuth } = useAuthStore();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    void initAuth().finally(() => setReady(true));
+  }, [initAuth]);
+
+  if (!ready) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#FAFAF8]">
+        <Spin size="large" description="正在确认登录状态..." />
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to={user ? (user.onboarded ? '/chat' : '/onboarding') : '/login'} replace />} />
+      <Route path="/login" element={user ? <Navigate to={user.onboarded ? '/chat' : '/onboarding'} replace /> : <LoginPage />} />
+      <Route path="/register" element={user ? <Navigate to={user.onboarded ? '/chat' : '/onboarding'} replace /> : <RegisterPage />} />
+      <Route path="/onboarding" element={<RequireAuth><OnboardingPage /></RequireAuth>} />
+      <Route path="/chat" element={<RequireAuth><ChatPage /></RequireAuth>} />
+      <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function RequireAuth({ children }: { children: ReactNode }) {
+  const user = useAuthStore((state) => state.user);
+  return user ? children : <Navigate to="/login" replace />;
 }
 
 export default App

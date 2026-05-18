@@ -1,9 +1,20 @@
 export interface User {
   id: number;
-  sessionId: string;
-  nickname?: string;
+  username: string;
   onboarded: boolean;
   createdAt: string;
+}
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  onboarded: boolean;
+  createdAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
 }
 
 export type Evidence = string[] | string | Record<string, unknown> | null;
