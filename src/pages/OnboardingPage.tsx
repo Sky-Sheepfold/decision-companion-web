@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { App as AntApp, Button, Input, Spin } from 'antd';
 import { RightOutlined } from '@ant-design/icons';
 import { onboardingApi } from '../api/agent';
+import { useAuthStore } from '../stores/authStore';
 import type { OnboardingQuestion } from '../types';
 import { StepIndicator } from '../components/common/StepIndicator';
 
@@ -11,8 +12,9 @@ const { TextArea } = Input;
 export function OnboardingPage() {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
+  const markOnboarded = useAuthStore((state) => state.markOnboarded);
   const [currentStep, setCurrentStep] = useState(1);
-  const [totalSteps] = useState(5);
+  const [totalSteps, setTotalSteps] = useState(5);
   const [question, setQuestion] = useState<OnboardingQuestion | null>(null);
   const [answer, setAnswer] = useState('');
   const [conversation, setConversation] = useState<Array<{ role: string; content: string }>>([]);
@@ -36,8 +38,10 @@ export function OnboardingPage() {
     async function checkOnboardingStatus() {
       try {
         const status = await onboardingApi.getStatus();
+        setTotalSteps(status.totalSteps);
         if (status.onboarded) {
-          navigate('/chat');
+          markOnboarded();
+          navigate('/chat', { replace: true });
           return;
         }
         setCurrentStep(status.currentStep);
@@ -49,7 +53,7 @@ export function OnboardingPage() {
     }
 
     checkOnboardingStatus();
-  }, [loadQuestion, navigate]);
+  }, [loadQuestion, markOnboarded, navigate]);
 
   async function handleSubmit() {
     if (!answer.trim()) return;
@@ -62,17 +66,20 @@ export function OnboardingPage() {
     try {
       const result = await onboardingApi.submitAnswer(currentStep, answer);
 
-      const assistantMessage = { role: 'assistant', content: result.reply };
-      setConversation((prev) => [...prev, assistantMessage]);
+      if (result.reply) {
+        const assistantMessage = { role: 'assistant', content: result.reply };
+        setConversation((prev) => [...prev, assistantMessage]);
+      }
+
+      setTotalSteps(result.totalSteps);
 
       if (result.isCompleted) {
-        setTimeout(() => {
-          navigate('/chat');
-        }, 2000);
+        markOnboarded();
+        navigate('/chat', { replace: true });
       } else {
-        setCurrentStep(result.currentStep + 1);
+        setCurrentStep(result.nextStep);
         setAnswer('');
-        await loadQuestion(result.currentStep + 1);
+        await loadQuestion(result.nextStep);
       }
     } catch (err) {
       console.error('Submit error:', err);
@@ -82,13 +89,27 @@ export function OnboardingPage() {
     }
   }
 
-  function handleSkip() {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+  async function handleSkip() {
+    setIsSubmitting(true);
+
+    try {
+      const result = await onboardingApi.skipStep(currentStep);
+      setTotalSteps(result.totalSteps);
+
+      if (result.isCompleted) {
+        markOnboarded();
+        navigate('/chat', { replace: true });
+        return;
+      }
+
+      setCurrentStep(result.nextStep);
       setAnswer('');
-      loadQuestion(currentStep + 1);
-    } else {
-      navigate('/chat');
+      await loadQuestion(result.nextStep);
+    } catch (err) {
+      console.error('Skip error:', err);
+      message.error('跳过失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
     }
   }
 

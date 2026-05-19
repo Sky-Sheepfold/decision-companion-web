@@ -92,6 +92,7 @@ export interface ChatMessage {
 
 export interface OnboardingQuestion {
   step: number;
+  type: string;
   question: string;
   hint?: string;
 }
@@ -99,6 +100,17 @@ export interface OnboardingQuestion {
 export interface OnboardingStatus {
   onboarded: boolean;
   currentStep: number;
+  totalSteps: number;
+  completedSteps: number;
+  answeredSteps: number;
+  skippedSteps: number;
+}
+
+export interface OnboardingStepResult {
+  reply?: string | null;
+  isCompleted: boolean;
+  currentStep: number;
+  nextStep: number;
   totalSteps: number;
 }
 

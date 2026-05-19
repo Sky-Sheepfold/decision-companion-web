@@ -12,6 +12,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<AuthUser>;
   register: (username: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  markOnboarded: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -76,6 +77,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       resetUserScopedState();
       set({ user: null, loading: false, error: null });
     }
+  },
+
+  markOnboarded: () => {
+    set((state) => ({
+      user: state.user ? { ...state.user, onboarded: true } : state.user,
+    }));
   },
 }));
 

@@ -5,6 +5,7 @@ import type {
   User,
   UserProfile,
   OnboardingQuestion,
+  OnboardingStepResult,
   OnboardingStatus,
   ProfileValues,
   ProfileDecision,
@@ -152,15 +153,17 @@ export const onboardingApi = {
   submitAnswer: (
     step: number,
     answer: string
-  ): Promise<{
-    reply: string;
-    isCompleted: boolean;
-    currentStep: number;
-    totalSteps: number;
-  }> => {
+  ): Promise<OnboardingStepResult> => {
     return fetchApi('/onboarding/answer', {
       method: 'POST',
       body: JSON.stringify({ step, answer }),
+    });
+  },
+
+  skipStep: (step: number): Promise<OnboardingStepResult> => {
+    return fetchApi('/onboarding/skip', {
+      method: 'POST',
+      body: JSON.stringify({ step }),
     });
   },
 
