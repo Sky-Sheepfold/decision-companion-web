@@ -12,25 +12,23 @@ import type { ChatMessage, UserProfile } from '../types';
 
 const { Content, Sider } = Layout;
 
-const INITIAL_MESSAGE = {
-  role: 'assistant' as const,
-  content: '你好，很高兴见到你。今天有什么想聊的吗？',
-  timestamp: new Date().toISOString(),
-};
-
 export function ChatPage() {
-  const { messages, isStreaming, error, sendMessage } = useChatStore();
+  const { messages, isStreaming, error, sendMessage, loadConversations } = useChatStore();
   const { profile, fetchProfile } = useProfileStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
       if (messages.length === 0) {
         useChatStore.setState(() => ({
-          messages: [INITIAL_MESSAGE],
+          messages: [createInitialMessage()],
         }));
       }
     }
@@ -151,6 +149,14 @@ export function ChatPage() {
       </Layout>
     </Layout>
   );
+}
+
+function createInitialMessage(): ChatMessage {
+  return {
+    role: 'assistant',
+    content: '你好，很高兴见到你。今天有什么想聊的吗？',
+    timestamp: new Date().toISOString(),
+  };
 }
 
 function DecisionStarterPanel({ onPick }: { onPick: (text: string) => void }) {

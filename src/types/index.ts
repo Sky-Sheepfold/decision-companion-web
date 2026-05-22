@@ -85,9 +85,35 @@ export interface UserProfile {
 }
 
 export interface ChatMessage {
+  id?: number;
+  conversationId?: number;
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
+}
+
+export interface ChatConversation {
+  id: number;
+  userId: number;
+  title: string;
+  messageCount: number;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersistedChatMessage {
+  id: number;
+  conversationId: number;
+  userId: number;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface ChatResponse {
+  conversationId: number;
+  reply: string;
 }
 
 export interface OnboardingQuestion {

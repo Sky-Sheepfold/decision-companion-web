@@ -1,27 +1,86 @@
 import { create } from 'zustand';
-import type { ChatMessage } from '../types';
+import type { ChatConversation, ChatMessage, PersistedChatMessage } from '../types';
 import { agentApi } from '../api/agent';
 
 interface ChatState {
   messages: ChatMessage[];
+  conversations: ChatConversation[];
+  currentConversationId: number | null;
+  isLoadingConversations: boolean;
+  isLoadingMessages: boolean;
   isStreaming: boolean;
   error: string | null;
+  loadConversations: () => Promise<void>;
+  openConversation: (conversationId: number) => Promise<void>;
+  startNewConversation: () => void;
   sendMessage: (text: string) => Promise<void>;
   clearMessages: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
+  conversations: [],
+  currentConversationId: null,
+  isLoadingConversations: false,
+  isLoadingMessages: false,
   isStreaming: false,
   error: null,
 
-  sendMessage: async (text: string) => {
+  loadConversations: async () => {
+    set({ isLoadingConversations: true });
+    try {
+      const conversations = await agentApi.listConversations();
+      set({ conversations, isLoadingConversations: false });
+    } catch (err) {
+      console.error('Load conversations error:', err);
+      set({ isLoadingConversations: false, error: '读取历史对话失败，请稍后重试' });
+    }
+  },
+
+  openConversation: async (conversationId: number) => {
     const { isStreaming } = get();
+    if (isStreaming) return;
+
+    set({
+      currentConversationId: conversationId,
+      isLoadingMessages: true,
+      error: null,
+    });
+
+    try {
+      const messages = await agentApi.listMessages(conversationId);
+      set({
+        messages: messages.length > 0
+          ? messages.map(toChatMessage)
+          : [createInitialAssistantMessage()],
+        isLoadingMessages: false,
+      });
+    } catch (err) {
+      console.error('Load conversation messages error:', err);
+      set({ isLoadingMessages: false, error: '读取对话内容失败，请稍后重试' });
+    }
+  },
+
+  startNewConversation: () => {
+    const { isStreaming } = get();
+    if (isStreaming) return;
+
+    set({
+      messages: [createInitialAssistantMessage()],
+      currentConversationId: null,
+      error: null,
+      isLoadingMessages: false,
+    });
+  },
+
+  sendMessage: async (text: string) => {
+    const { isStreaming, currentConversationId } = get();
     if (!text.trim() || isStreaming) return;
+    const trimmedText = text.trim();
 
     const userMessage: ChatMessage = {
       role: 'user',
-      content: text.trim(),
+      content: trimmedText,
       timestamp: new Date().toISOString(),
     };
 
@@ -41,13 +100,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
 
     try {
-      const response = await agentApi.chatStream(text);
+      const response = await agentApi.chatStream(trimmedText, currentConversationId ?? undefined);
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
       }
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let pendingChunk = '';
+      let pendingText = '';
 
       if (!reader) {
         throw new Error('无法获取响应流');
@@ -57,18 +116,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const { done, value } = await reader.read();
         if (done) break;
 
-        pendingChunk += decoder.decode(value, { stream: true });
-        const parsedText = extractStreamText(pendingChunk);
-        pendingChunk = parsedText.remaining;
+        pendingText += decoder.decode(value, { stream: true });
+        const parsedEvents = extractSseEvents(pendingText);
+        pendingText = parsedEvents.remaining;
 
-        if (parsedText.content) {
-          appendToAssistantMessage(parsedText.content, set);
+        for (const event of parsedEvents.events) {
+          handleSseEvent(event, set);
         }
       }
 
-      if (pendingChunk.trim()) {
-        appendToAssistantMessage(extractStreamText(`${pendingChunk}\n`).content, set);
+      pendingText += decoder.decode();
+      if (pendingText.trim()) {
+        const parsedEvents = extractSseEvents(`${pendingText}\n\n`);
+        for (const event of parsedEvents.events) {
+          handleSseEvent(event, set);
+        }
       }
+      await get().loadConversations();
     } catch (err) {
       console.error('Chat error:', err);
       set({ error: '发送消息失败，请稍后重试' });
@@ -81,9 +145,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearMessages: () => {
-    set({ messages: [], error: null });
+    set({
+      messages: [],
+      conversations: [],
+      currentConversationId: null,
+      isLoadingConversations: false,
+      isLoadingMessages: false,
+      isStreaming: false,
+      error: null,
+    });
   },
 }));
+
+function createInitialAssistantMessage(): ChatMessage {
+  return {
+    role: 'assistant',
+    content: '你好，很高兴见到你。今天有什么想聊的吗？',
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function toChatMessage(message: PersistedChatMessage): ChatMessage {
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    role: message.role,
+    content: message.content,
+    timestamp: message.createdAt,
+  };
+}
 
 function appendToAssistantMessage(
   content: string,
@@ -102,19 +192,63 @@ function appendToAssistantMessage(
   });
 }
 
-function extractStreamText(chunk: string) {
-  const lines = chunk.split(/\r?\n/);
-  const remaining = lines.pop() ?? '';
-  const content = lines
-    .map((line) => {
-      if (!line.trim()) return '';
-      if (line.startsWith('data:')) {
-        const value = line.slice(5).trimStart();
-        return value === '[DONE]' ? '' : value;
-      }
-      return line;
-    })
-    .join('');
+interface SseEvent {
+  event: string;
+  data: string;
+}
 
-  return { content, remaining };
+function handleSseEvent(
+  event: SseEvent,
+  set: (partial: ChatState | Partial<ChatState> | ((state: ChatState) => ChatState | Partial<ChatState>)) => void
+) {
+  if (event.data === '[DONE]') return;
+
+  if (event.event === 'conversation') {
+    try {
+      const payload = JSON.parse(event.data) as { conversationId?: number };
+      if (payload.conversationId) {
+        set({ currentConversationId: payload.conversationId });
+      }
+    } catch (err) {
+      console.warn('Parse conversation event error:', err);
+    }
+    return;
+  }
+
+  appendToAssistantMessage(event.data, set);
+}
+
+function extractSseEvents(text: string) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const blocks = normalized.split('\n\n');
+  const remaining = blocks.pop() ?? '';
+  const events = blocks
+    .map(parseSseBlock)
+    .filter((event): event is SseEvent => event !== null);
+
+  return { events, remaining };
+}
+
+function parseSseBlock(block: string): SseEvent | null {
+  let event = 'message';
+  const data: string[] = [];
+
+  for (const line of block.split('\n')) {
+    if (!line || line.startsWith(':')) continue;
+    if (line.startsWith('event:')) {
+      event = readSseValue(line, 'event:').trim();
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      data.push(readSseValue(line, 'data:'));
+    }
+  }
+
+  if (data.length === 0) return null;
+  return { event, data: data.join('\n') };
+}
+
+function readSseValue(line: string, prefix: string) {
+  const value = line.slice(prefix.length);
+  return value.startsWith(' ') ? value.slice(1) : value;
 }

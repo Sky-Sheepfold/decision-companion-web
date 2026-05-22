@@ -11,7 +11,10 @@ import type {
   ProfileDecision,
   ProfileEmotion,
   ProfileRelationship,
-  ProfileFear
+  ProfileFear,
+  ChatConversation,
+  ChatResponse,
+  PersistedChatMessage
 } from '../types';
 
 export const AUTH_TOKEN_KEY = 'decision_companion_token';
@@ -67,20 +70,38 @@ async function readJson<T>(response: Response): Promise<ApiResponse<T> | null> {
 }
 
 export const agentApi = {
-  chat: (message: string): Promise<{ reply: string }> => {
+  chat: (message: string, conversationId?: number): Promise<ChatResponse> => {
     return fetchApi('/agent/chat', {
       method: 'POST',
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, conversationId }),
     });
   },
 
-  chatStream: (message: string): Promise<Response> => {
+  chatStream: (message: string, conversationId?: number): Promise<Response> => {
     const token = getAuthToken();
     const params = new URLSearchParams({ message });
+    if (conversationId) {
+      params.set('conversationId', String(conversationId));
+    }
     return fetch(`${API_BASE_URL}/agent/chat/stream?${params}`, {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+    });
+  },
+
+  listConversations: (limit = 50): Promise<ChatConversation[]> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return fetchApi(`/agent/conversations?${params}`);
+  },
+
+  listMessages: (conversationId: number): Promise<PersistedChatMessage[]> => {
+    return fetchApi(`/agent/conversations/${conversationId}/messages`);
+  },
+
+  deleteConversation: (conversationId: number): Promise<void> => {
+    return fetchApi(`/agent/conversations/${conversationId}`, {
+      method: 'DELETE',
     });
   },
 };

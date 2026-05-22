@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRightOutlined,
@@ -8,46 +9,45 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
+import type { ChatConversation } from '../../types';
 
 interface SidebarProps {
   className?: string;
 }
 
-interface ChatHistoryItem {
-  id: string;
+interface ChatHistoryItem extends ChatConversation {
   title: string;
   date: string;
   group: string;
   summary: string;
-  active?: boolean;
 }
 
-const mockHistory: ChatHistoryItem[] = [
-  { id: '1', title: '关于职业选择', date: '21:20', group: '今天', summary: '重大决策探索', active: true },
-  { id: '2', title: '和父母的沟通', date: '昨天', group: '昨天', summary: '关系沟通' },
-  { id: '3', title: '是否要换城市', date: '5月10日', group: '更早', summary: '城市与工作权衡' },
-  { id: '4', title: '考研还是工作', date: '5月8日', group: '更早', summary: '长期规划复盘' },
-];
+const HISTORY_GROUP_ORDER = ['今天', '昨天', '更早'];
 
 export function Sidebar({ className = '' }: SidebarProps) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const {
+    conversations,
+    currentConversationId,
+    isLoadingConversations,
+    isLoadingMessages,
+    isStreaming,
+    openConversation,
+    startNewConversation,
+  } = useChatStore();
+
   const resetChat = () => {
-    useChatStore.setState({
-      messages: [{
-        role: 'assistant',
-        content: '你好，很高兴见到你。今天有什么想聊的吗？',
-        timestamp: new Date().toISOString(),
-      }],
-      error: null,
-      isStreaming: false,
-    });
+    startNewConversation();
     navigate('/chat');
   };
-  const groups = mockHistory.reduce<Record<string, ChatHistoryItem[]>>((acc, item) => {
-    acc[item.group] = [...(acc[item.group] || []), item];
-    return acc;
-  }, {});
+
+  const groups = useMemo(() => groupConversations(conversations), [conversations]);
+
+  const handleOpenConversation = async (conversationId: number) => {
+    navigate('/chat');
+    await openConversation(conversationId);
+  };
 
   return (
     <aside className={`chat-sidebar ${className}`}>
@@ -57,12 +57,18 @@ export function Sidebar({ className = '' }: SidebarProps) {
           <strong>决策伙伴</strong>
           <span>安静地记住你</span>
         </div>
-        <button type="button" className="chat-sidebar-icon-button" onClick={resetChat} aria-label="新建对话">
+        <button
+          type="button"
+          className="chat-sidebar-icon-button"
+          onClick={resetChat}
+          aria-label="新建对话"
+          disabled={isStreaming}
+        >
           <FormOutlined />
         </button>
       </header>
 
-      <button type="button" className="chat-new-thread" onClick={resetChat}>
+      <button type="button" className="chat-new-thread" onClick={resetChat} disabled={isStreaming}>
         <FormOutlined />
         <span>开启新的决策整理</span>
       </button>
@@ -72,19 +78,25 @@ export function Sidebar({ className = '' }: SidebarProps) {
           <ClockCircleOutlined />
           <span>历史对话</span>
         </div>
-        {mockHistory.length === 0 ? (
-          <div className="chat-history-empty">还没有历史对话</div>
+        {conversations.length === 0 ? (
+          <div className="chat-history-empty">
+            {isLoadingConversations ? '正在读取历史对话...' : '还没有历史对话'}
+          </div>
         ) : (
           <div className="chat-history-groups">
-            {Object.entries(groups).map(([group, items]) => (
+            {HISTORY_GROUP_ORDER.filter((group) => groups[group]?.length).map((group) => (
               <section key={group} className="chat-history-group">
                 <div className="chat-history-group-label">{group}</div>
                 <div className="chat-history-list">
-                  {items.map((item) => (
+                  {groups[group].map((item) => (
                     <button
                       key={item.id}
                       type="button"
-                      className={`chat-history-row ${item.active ? 'active' : ''}`}
+                      className={`chat-history-row ${item.id === currentConversationId ? 'active' : ''}`}
+                      onClick={() => {
+                        void handleOpenConversation(item.id);
+                      }}
+                      disabled={isStreaming || isLoadingMessages}
                     >
                       <div className="chat-history-row-main">
                         <strong>{item.title}</strong>
@@ -130,4 +142,60 @@ export function Sidebar({ className = '' }: SidebarProps) {
       </footer>
     </aside>
   );
+}
+
+function groupConversations(conversations: ChatConversation[]) {
+  return conversations
+    .filter((conversation) => !conversation.deleted)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .reduce<Record<string, ChatHistoryItem[]>>((acc, conversation) => {
+      const group = getConversationGroup(conversation.updatedAt);
+      acc[group] = [
+        ...(acc[group] || []),
+        {
+          ...conversation,
+          title: conversation.title || '未命名对话',
+          date: formatConversationDate(conversation.updatedAt, group),
+          group,
+          summary: `${conversation.messageCount} 条消息`,
+        },
+      ];
+      return acc;
+    }, {});
+}
+
+function getConversationGroup(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (toDateKey(date) === toDateKey(today)) return '今天';
+  if (toDateKey(date) === toDateKey(yesterday)) return '昨天';
+  return '更早';
+}
+
+function formatConversationDate(value: string, group: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  if (group === '今天') {
+    return date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+  if (group === '昨天') return '昨天';
+  return date.toLocaleDateString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
+
+function toDateKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
