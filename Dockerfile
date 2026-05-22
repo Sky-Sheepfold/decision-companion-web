@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS build
+FROM node:20.19.0-alpine AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+    npm ci --no-audit --fund=false
 
 COPY . .
 
