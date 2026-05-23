@@ -105,13 +105,13 @@ export function ChatPage() {
                 )}
 
                 {shouldShowTyping && (
-                  <div className="message-enter flex gap-3">
+                  <div className="message-enter chat-message-row assistant typing">
                     <img
-                      className="h-8 w-8 flex-shrink-0 rounded-full border border-[#E9D8C8] bg-white object-cover shadow-sm"
+                      className="chat-message-avatar assistant"
                       src="/decision-companion-logo.png"
                       alt="决策伙伴正在输入"
                     />
-                    <div className="rounded-[0_14px_14px_14px] bg-white px-4 py-2.5 shadow-sm border border-[#E9D8C8]">
+                    <div className="chat-message-bubble assistant typing">
                       <TypingIndicator />
                     </div>
                   </div>
