@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { App as AntApp, Alert, Button, Checkbox, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, UserOutlined } from '@ant-design/icons';
 import { AuthLayout } from '../components/auth/AuthLayout';
+import { getApiErrorMessage } from '../api/agent';
 import { useAuthStore } from '../stores/authStore';
 
 interface RegisterFormValues {
@@ -28,7 +29,7 @@ export function RegisterPage() {
       message.success('账号已创建');
       navigate('/onboarding', { replace: true });
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '注册失败');
+      message.error(getApiErrorMessage(err, '注册失败'));
     }
   }
 

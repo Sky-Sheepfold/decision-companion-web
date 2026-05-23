@@ -21,6 +21,40 @@ export const AUTH_TOKEN_KEY = 'decision_companion_token';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
+export const ApiCode = {
+  SUCCESS: 200,
+  UNAUTHORIZED: 40100,
+  TOKEN_INVALID: 40102,
+  USER_NOT_FOUND: 40401,
+} as const;
+
+export class ApiError extends Error {
+  readonly code: number;
+  readonly httpStatus: number;
+  readonly response: ApiResponse<unknown> | null;
+
+  constructor(message: string, code: number, httpStatus: number, response: ApiResponse<unknown> | null) {
+    super(message);
+    this.name = 'ApiError';
+    this.code = code;
+    this.httpStatus = httpStatus;
+    this.response = response;
+  }
+
+  get isUnauthorized() {
+    return this.httpStatus === 401 || this.code === ApiCode.UNAUTHORIZED || this.code === ApiCode.TOKEN_INVALID;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string) {
+  if (isApiError(error) && error.message) return error.message;
+  return fallback;
+}
+
 export function getAuthToken() {
   return localStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -50,14 +84,11 @@ async function fetchApi<T>(
   const result: ApiResponse<T> | null = await readJson(response);
 
   if (!response.ok) {
-    if (response.status === 401) {
-      clearAuthToken();
-    }
-    throw new Error(result?.message || `API Error: ${response.status}`);
+    throw createApiError(response, result, `API Error: ${response.status}`);
   }
 
-  if (!result || result.code !== 200) {
-    throw new Error(result?.message || 'Request failed');
+  if (!result || result.code !== ApiCode.SUCCESS) {
+    throw createApiError(response, result, 'Request failed');
   }
 
   return result.data;
@@ -66,7 +97,30 @@ async function fetchApi<T>(
 async function readJson<T>(response: Response): Promise<ApiResponse<T> | null> {
   const text = await response.text();
   if (!text) return null;
-  return JSON.parse(text) as ApiResponse<T>;
+  try {
+    return JSON.parse(text) as ApiResponse<T>;
+  } catch {
+    return null;
+  }
+}
+
+export async function readApiError(response: Response, fallback: string) {
+  return createApiError(response, await readJson(response), fallback);
+}
+
+function createApiError<T>(response: Response, result: ApiResponse<T> | null, fallback: string) {
+  const error = new ApiError(
+    result?.message || fallback,
+    result?.code ?? response.status,
+    response.status,
+    result as ApiResponse<unknown> | null
+  );
+
+  if (error.isUnauthorized) {
+    clearAuthToken();
+  }
+
+  return error;
 }
 
 export const agentApi = {

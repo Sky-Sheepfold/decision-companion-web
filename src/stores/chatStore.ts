@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ChatConversation, ChatMessage, PersistedChatMessage } from '../types';
-import { agentApi } from '../api/agent';
+import { agentApi, getApiErrorMessage, readApiError } from '../api/agent';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -33,7 +33,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ conversations, isLoadingConversations: false });
     } catch (err) {
       console.error('Load conversations error:', err);
-      set({ isLoadingConversations: false, error: '读取历史对话失败，请稍后重试' });
+      set({ isLoadingConversations: false, error: getApiErrorMessage(err, '读取历史对话失败，请稍后重试') });
     }
   },
 
@@ -57,7 +57,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     } catch (err) {
       console.error('Load conversation messages error:', err);
-      set({ isLoadingMessages: false, error: '读取对话内容失败，请稍后重试' });
+      set({ isLoadingMessages: false, error: getApiErrorMessage(err, '读取对话内容失败，请稍后重试') });
     }
   },
 
@@ -102,7 +102,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const response = await agentApi.chatStream(trimmedText, currentConversationId ?? undefined);
       if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+        throw await readApiError(response, '发送消息失败，请稍后重试');
       }
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -135,7 +135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await get().loadConversations();
     } catch (err) {
       console.error('Chat error:', err);
-      set({ error: '发送消息失败，请稍后重试' });
+      set({ error: getApiErrorMessage(err, '发送消息失败，请稍后重试') });
       set((state) => ({
         messages: state.messages.slice(0, -1),
       }));

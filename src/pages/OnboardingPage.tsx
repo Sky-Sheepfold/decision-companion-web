@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { App as AntApp, Button, Input, Spin } from 'antd';
 import { RightOutlined } from '@ant-design/icons';
-import { onboardingApi } from '../api/agent';
+import { getApiErrorMessage, onboardingApi } from '../api/agent';
 import { useAuthStore } from '../stores/authStore';
 import type { OnboardingQuestion } from '../types';
 import { StepIndicator } from '../components/common/StepIndicator';
@@ -28,7 +28,7 @@ export function OnboardingPage() {
       setQuestion(data);
     } catch (err) {
       console.error('Load question error:', err);
-      message.error('加载问题失败');
+      message.error(getApiErrorMessage(err, '加载问题失败'));
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +83,7 @@ export function OnboardingPage() {
       }
     } catch (err) {
       console.error('Submit error:', err);
-      message.error('提交失败，请稍后重试');
+      message.error(getApiErrorMessage(err, '提交失败，请稍后重试'));
     } finally {
       setIsSubmitting(false);
     }
@@ -107,7 +107,7 @@ export function OnboardingPage() {
       await loadQuestion(result.nextStep);
     } catch (err) {
       console.error('Skip error:', err);
-      message.error('跳过失败，请稍后重试');
+      message.error(getApiErrorMessage(err, '跳过失败，请稍后重试'));
     } finally {
       setIsSubmitting(false);
     }

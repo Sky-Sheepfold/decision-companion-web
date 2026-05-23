@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { App as AntApp, Alert, Button, Checkbox, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, UserOutlined } from '@ant-design/icons';
 import { AuthLayout } from '../components/auth/AuthLayout';
+import { getApiErrorMessage } from '../api/agent';
 import { useAuthStore } from '../stores/authStore';
 
 interface LoginFormValues {
@@ -27,7 +28,7 @@ export function LoginPage() {
       message.success('欢迎回来');
       navigate(authUser.onboarded ? '/chat' : '/onboarding', { replace: true });
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '登录失败');
+      message.error(getApiErrorMessage(err, '登录失败'));
     }
   }
 

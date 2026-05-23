@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { authApi, clearAuthToken, getAuthToken, setAuthToken } from '../api/agent';
+import { authApi, clearAuthToken, getApiErrorMessage, getAuthToken, setAuthToken } from '../api/agent';
 import type { AuthUser } from '../types';
 import { useChatStore } from './chatStore';
 import { useProfileStore } from './profileStore';
@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: response.user, loading: false });
       return response.user;
     } catch (err) {
-      const error = err instanceof Error ? err.message : '登录失败';
+      const error = getApiErrorMessage(err, '登录失败');
       set({ error, loading: false });
       throw err;
     }
@@ -61,7 +61,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: response.user, loading: false });
       return response.user;
     } catch (err) {
-      const error = err instanceof Error ? err.message : '注册失败';
+      const error = getApiErrorMessage(err, '注册失败');
       set({ error, loading: false });
       throw err;
     }

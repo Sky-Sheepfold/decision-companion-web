@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { UserProfile } from '../types';
-import { profileApi } from '../api/agent';
+import { ApiCode, isApiError, profileApi } from '../api/agent';
 
 interface ProfileState {
   profile: UserProfile | null;
@@ -51,7 +51,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         loading: false,
       });
     } catch (err) {
-      if (err instanceof Error && err.message === '用户不存在') {
+      if (isApiError(err) && err.code === ApiCode.USER_NOT_FOUND) {
         set({
           profile: null,
           completeness: 0,
