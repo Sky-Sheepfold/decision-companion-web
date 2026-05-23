@@ -7,6 +7,7 @@ import {
   LogoutOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { App as AntApp } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { useChatStore } from '../../stores/chatStore';
 import type { ChatConversation } from '../../types';
@@ -26,6 +27,7 @@ const HISTORY_GROUP_ORDER = ['今天', '昨天', '更早'];
 
 export function Sidebar({ className = '' }: SidebarProps) {
   const navigate = useNavigate();
+  const { message } = AntApp.useApp();
   const { user, logout } = useAuthStore();
   const {
     conversations,
@@ -131,8 +133,14 @@ export function Sidebar({ className = '' }: SidebarProps) {
         <button
           type="button"
           onClick={async () => {
-            await logout();
-            navigate('/login', { replace: true });
+            try {
+              await logout();
+            } catch {
+              // Local auth state is cleared in the store even if the server request fails.
+            } finally {
+              message.success('已退出登录');
+              navigate('/login', { replace: true });
+            }
           }}
           className="chat-sidebar-logout"
         >

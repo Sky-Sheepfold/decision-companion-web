@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App as AntApp, Alert, Button, Checkbox, Form, Input } from 'antd';
+import { App as AntApp, Button, Checkbox, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, UserOutlined } from '@ant-design/icons';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { getApiErrorMessage } from '../api/agent';
@@ -16,7 +16,7 @@ interface RegisterFormValues {
 export function RegisterPage() {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
-  const { user, loading, error, register } = useAuthStore();
+  const { user, loading, register } = useAuthStore();
 
   useEffect(() => {
     if (!user) return;
@@ -41,15 +41,6 @@ export function RegisterPage() {
       switchTo="/login"
       switchLabel="直接登录"
     >
-      {error && (
-        <Alert
-          type="error"
-          showIcon
-          title={error}
-          className="mb-5 !rounded-lg !border-[#F5D5CB] !bg-[#FAECE7] !text-[#993C1D]"
-        />
-      )}
-
       <Form<RegisterFormValues>
         layout="vertical"
         requiredMark={false}
