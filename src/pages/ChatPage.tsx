@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Layout, Drawer, Alert } from 'antd';
 import { useChatStore } from '../stores/chatStore';
-import { useProfileStore } from '../stores/profileStore';
+import { ONBOARDING_PROFILE_REFRESH_KEY } from '../stores/authStore';
+import { countProfileRecords, useProfileStore } from '../stores/profileStore';
 import { Sidebar } from '../components/common/Sidebar';
 import { ChatHeader } from '../components/chat/ChatHeader';
 import { ChatInput } from '../components/chat/ChatInput';
@@ -46,7 +47,7 @@ export function ChatPage() {
   useEffect(() => {
     if (isStreaming || messages.length <= 1) return;
     const timer = window.setTimeout(() => {
-      void fetchProfile();
+      void fetchProfile({ force: true });
     }, 900);
 
     return () => window.clearTimeout(timer);
@@ -55,6 +56,29 @@ export function ChatPage() {
   const contextSummary = useMemo(() => buildContextSummary(messages, profile), [messages, profile]);
   const shouldShowTyping = isStreaming && messages[messages.length - 1]?.role === 'assistant' && !messages[messages.length - 1]?.content.trim();
   const hasUserMessages = messages.some((message) => message.role === 'user');
+  const profileRecordCount = countProfileRecords(profile);
+
+  useEffect(() => {
+    const needsInitialProfileRefresh = sessionStorage.getItem(ONBOARDING_PROFILE_REFRESH_KEY);
+    if (!needsInitialProfileRefresh) return;
+
+    if (profileRecordCount > 0) {
+      sessionStorage.removeItem(ONBOARDING_PROFILE_REFRESH_KEY);
+      return;
+    }
+
+    const retryTimers = [1500, 4000, 9000, 15000].map((delay) => window.setTimeout(() => {
+      void fetchProfile({ force: true });
+    }, delay));
+    const stopTimer = window.setTimeout(() => {
+      sessionStorage.removeItem(ONBOARDING_PROFILE_REFRESH_KEY);
+    }, 16000);
+
+    return () => {
+      retryTimers.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(stopTimer);
+    };
+  }, [fetchProfile, profileRecordCount]);
 
   const handleSend = async (text: string) => {
     await sendMessage(text);

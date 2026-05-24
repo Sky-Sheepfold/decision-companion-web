@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Button, Progress } from 'antd';
 import {
   BookOutlined,
@@ -23,29 +23,14 @@ type MemoryTone = 'value' | 'emotion' | 'fear' | 'relationship' | 'decision';
 
 export function MemoryCompass() {
   const navigate = useNavigate();
-  const { isStreaming, messages } = useChatStore();
+  const { isStreaming } = useChatStore();
   const {
     profile,
     loading,
     error,
     completeness,
-    fetchProfile,
     getCompletenessText,
   } = useProfileStore();
-
-  useEffect(() => {
-    void fetchProfile();
-  }, [fetchProfile]);
-
-  useEffect(() => {
-    if (isStreaming || messages.length <= 1) return;
-
-    const refreshTimer = window.setTimeout(() => {
-      void fetchProfile();
-    }, 900);
-
-    return () => window.clearTimeout(refreshTimer);
-  }, [fetchProfile, isStreaming, messages.length]);
 
   const snapshot = useMemo(() => {
     const values = profile?.values ?? [];

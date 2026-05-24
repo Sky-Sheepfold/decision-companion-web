@@ -20,6 +20,12 @@ import type {
 export const AUTH_TOKEN_KEY = 'decision_companion_token';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+const CLIENT_TAB_KEY = 'decision_companion_tab_id';
+let onboardingStatusRequest: Promise<OnboardingStatus> | null = null;
+let requestSequence = 0;
+
+const CLIENT_TAB_ID = getOrCreateClientTabId();
+const PAGE_LOAD_ID = createTraceId();
 
 export const ApiCode = {
   SUCCESS: 200,
@@ -72,9 +78,11 @@ async function fetchApi<T>(
   options?: RequestInit
 ): Promise<T> {
   const token = getAuthToken();
+  const traceHeaders = nextTraceHeaders(endpoint);
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...traceHeaders,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
@@ -123,6 +131,32 @@ function createApiError<T>(response: Response, result: ApiResponse<T> | null, fa
   return error;
 }
 
+function getOrCreateClientTabId() {
+  const existing = sessionStorage.getItem(CLIENT_TAB_KEY);
+  if (existing) return existing;
+
+  const created = createTraceId();
+  sessionStorage.setItem(CLIENT_TAB_KEY, created);
+  return created;
+}
+
+function createTraceId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function nextTraceHeaders(endpoint: string) {
+  requestSequence += 1;
+  return {
+    'X-DC-Tab-Id': CLIENT_TAB_ID,
+    'X-DC-Page-Load-Id': PAGE_LOAD_ID,
+    'X-DC-Request-Seq': String(requestSequence),
+    'X-DC-Endpoint': endpoint,
+  };
+}
+
 export const agentApi = {
   chat: (message: string, conversationId?: number): Promise<ChatResponse> => {
     return fetchApi('/agent/chat', {
@@ -139,6 +173,7 @@ export const agentApi = {
     }
     return fetch(`${API_BASE_URL}/agent/chat/stream?${params}`, {
       headers: {
+        ...nextTraceHeaders('/agent/chat/stream'),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
@@ -243,6 +278,10 @@ export const onboardingApi = {
   },
 
   getStatus: (): Promise<OnboardingStatus> => {
-    return fetchApi('/onboarding/status');
+    onboardingStatusRequest ??= fetchApi<OnboardingStatus>('/onboarding/status')
+      .finally(() => {
+        onboardingStatusRequest = null;
+      });
+    return onboardingStatusRequest;
   },
 };

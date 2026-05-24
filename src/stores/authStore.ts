@@ -1,8 +1,15 @@
 import { create } from 'zustand';
 import { authApi, clearAuthToken, getApiErrorMessage, getAuthToken, setAuthToken } from '../api/agent';
 import type { AuthUser } from '../types';
+import { readSessionCache, removeSessionCache, writeSessionCache } from '../utils/sessionCache';
 import { useChatStore } from './chatStore';
-import { useProfileStore } from './profileStore';
+import { PROFILE_SESSION_CACHE_KEY, useProfileStore } from './profileStore';
+
+const AUTH_CACHE_KEY = 'decision_companion_auth_me_cache';
+const AUTH_CACHE_TTL_MS = 3000;
+export const ONBOARDING_PROFILE_REFRESH_KEY = 'decision_companion_onboarding_profile_refresh_at';
+
+let initAuthRequest: Promise<void> | null = null;
 
 interface AuthState {
   user: AuthUser | null;
@@ -21,20 +28,39 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   initAuth: async () => {
-    if (!getAuthToken()) {
+    const token = getAuthToken();
+    if (!token) {
       set({ user: null, loading: false, error: null });
       return;
     }
 
-    try {
-      set({ loading: true, error: null });
-      const user = await authApi.me();
-      set({ user, loading: false });
-    } catch (err) {
-      console.error('Init auth error:', err);
-      clearAuthToken();
-      set({ user: null, loading: false });
+    const cachedUser = readSessionCache<AuthUser>(AUTH_CACHE_KEY, token, AUTH_CACHE_TTL_MS);
+    if (cachedUser) {
+      set({ user: cachedUser, loading: false, error: null });
+      return;
     }
+
+    if (initAuthRequest) {
+      return initAuthRequest;
+    }
+
+    initAuthRequest = (async () => {
+      try {
+        set({ loading: true, error: null });
+        const user = await authApi.me();
+        writeSessionCache(AUTH_CACHE_KEY, token, user);
+        set({ user, loading: false });
+      } catch (err) {
+        console.error('Init auth error:', err);
+        clearAuthToken();
+        removeSessionCache(AUTH_CACHE_KEY);
+        set({ user: null, loading: false });
+      }
+    })().finally(() => {
+      initAuthRequest = null;
+    });
+
+    return initAuthRequest;
   },
 
   login: async (username: string, password: string) => {
@@ -43,6 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await authApi.login(username, password);
       setAuthToken(response.token);
       resetUserScopedState();
+      writeSessionCache(AUTH_CACHE_KEY, response.token, response.user);
       set({ user: response.user, loading: false });
       return response.user;
     } catch (err) {
@@ -58,6 +85,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const response = await authApi.register(username, password);
       setAuthToken(response.token);
       resetUserScopedState();
+      writeSessionCache(AUTH_CACHE_KEY, response.token, response.user);
       set({ user: response.user, loading: false });
       return response.user;
     } catch (err) {
@@ -74,25 +102,60 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } finally {
       clearAuthToken();
+      removeSessionCache(AUTH_CACHE_KEY);
       resetUserScopedState();
       set({ user: null, loading: false, error: null });
     }
   },
 
   markOnboarded: () => {
+    requestInitialProfileRefresh();
+    resetProfileSnapshot();
     set((state) => ({
-      user: state.user ? { ...state.user, onboarded: true } : state.user,
+      user: markCachedOnboarded(state.user),
     }));
   },
 }));
 
+function markCachedOnboarded(user: AuthUser | null) {
+  if (!user) return user;
+
+  const onboardedUser = { ...user, onboarded: true };
+  const token = getAuthToken();
+  if (token) {
+    writeSessionCache(AUTH_CACHE_KEY, token, onboardedUser);
+  }
+  return onboardedUser;
+}
+
 function resetUserScopedState() {
   sessionStorage.removeItem('chatCount');
+  removeSessionCache(PROFILE_SESSION_CACHE_KEY);
   useChatStore.getState().clearMessages();
   useProfileStore.setState({
     profile: null,
     error: null,
     completeness: 0,
     chatCount: 0,
+    lastFetchedAt: 0,
   });
+}
+
+function resetProfileSnapshot() {
+  removeSessionCache(PROFILE_SESSION_CACHE_KEY);
+  useProfileStore.setState({
+    profile: null,
+    loading: false,
+    error: null,
+    completeness: 0,
+    lastFetchedAt: 0,
+  });
+}
+
+function requestInitialProfileRefresh() {
+  try {
+    sessionStorage.setItem(ONBOARDING_PROFILE_REFRESH_KEY, String(Date.now()));
+  } catch {
+    // Session storage can be unavailable in privacy modes; profile refresh still works on normal page load.
+  }
 }

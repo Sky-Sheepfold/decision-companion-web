@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import type { ChatConversation, ChatMessage, PersistedChatMessage } from '../types';
-import { agentApi, getApiErrorMessage, readApiError } from '../api/agent';
+import { agentApi, getApiErrorMessage, getAuthToken, readApiError } from '../api/agent';
+import { readSessionCache, removeSessionCache, writeSessionCache } from '../utils/sessionCache';
+
+const CONVERSATIONS_CACHE_TTL_MS = 3000;
+export const CONVERSATIONS_SESSION_CACHE_KEY = 'decision_companion_conversations_cache';
+
+let conversationsRequest: Promise<void> | null = null;
+
+interface LoadConversationsOptions {
+  force?: boolean;
+}
 
 interface ChatState {
   messages: ChatMessage[];
@@ -10,7 +20,8 @@ interface ChatState {
   isLoadingMessages: boolean;
   isStreaming: boolean;
   error: string | null;
-  loadConversations: () => Promise<void>;
+  conversationsFetchedAt: number;
+  loadConversations: (options?: LoadConversationsOptions) => Promise<void>;
   openConversation: (conversationId: number) => Promise<void>;
   startNewConversation: () => void;
   sendMessage: (text: string) => Promise<void>;
@@ -25,16 +36,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingMessages: false,
   isStreaming: false,
   error: null,
+  conversationsFetchedAt: 0,
 
-  loadConversations: async () => {
-    set({ isLoadingConversations: true });
-    try {
-      const conversations = await agentApi.listConversations();
-      set({ conversations, isLoadingConversations: false });
-    } catch (err) {
-      console.error('Load conversations error:', err);
-      set({ isLoadingConversations: false, error: getApiErrorMessage(err, '读取历史对话失败，请稍后重试') });
+  loadConversations: async (options = {}) => {
+    if (conversationsRequest) {
+      await conversationsRequest;
+      if (!options.force) return;
     }
+
+    const { conversationsFetchedAt } = get();
+    if (!options.force && conversationsFetchedAt && Date.now() - conversationsFetchedAt < CONVERSATIONS_CACHE_TTL_MS) {
+      return;
+    }
+
+    const token = getAuthToken();
+    const cachedConversations = !options.force
+      ? readSessionCache<ChatConversation[]>(CONVERSATIONS_SESSION_CACHE_KEY, token, CONVERSATIONS_CACHE_TTL_MS)
+      : null;
+    if (cachedConversations) {
+      set({
+        conversations: cachedConversations,
+        isLoadingConversations: false,
+        conversationsFetchedAt: Date.now(),
+      });
+      return;
+    }
+
+    conversationsRequest = (async () => {
+      set({ isLoadingConversations: true });
+      try {
+        const conversations = await agentApi.listConversations();
+        writeSessionCache(CONVERSATIONS_SESSION_CACHE_KEY, token, conversations);
+        set({
+          conversations,
+          isLoadingConversations: false,
+          conversationsFetchedAt: Date.now(),
+        });
+      } catch (err) {
+        console.error('Load conversations error:', err);
+        set({ isLoadingConversations: false, error: getApiErrorMessage(err, '读取历史对话失败，请稍后重试') });
+      }
+    })().finally(() => {
+      conversationsRequest = null;
+    });
+
+    return conversationsRequest;
   },
 
   openConversation: async (conversationId: number) => {
@@ -132,7 +178,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           handleSseEvent(event, set);
         }
       }
-      await get().loadConversations();
+      await get().loadConversations({ force: true });
     } catch (err) {
       console.error('Chat error:', err);
       set({ error: getApiErrorMessage(err, '发送消息失败，请稍后重试') });
@@ -145,6 +191,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearMessages: () => {
+    removeSessionCache(CONVERSATIONS_SESSION_CACHE_KEY);
     set({
       messages: [],
       conversations: [],
@@ -153,6 +200,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isLoadingMessages: false,
       isStreaming: false,
       error: null,
+      conversationsFetchedAt: 0,
     });
   },
 }));

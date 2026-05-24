@@ -27,7 +27,6 @@ export function RegisterPage() {
     try {
       await register(values.username, values.password);
       message.success('账号已创建');
-      navigate('/onboarding', { replace: true });
     } catch (err) {
       message.error(getApiErrorMessage(err, '注册失败'));
     }
