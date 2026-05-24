@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { Button, Progress, Tag } from 'antd';
+import { Button, Progress } from 'antd';
 import {
   BookOutlined,
   EyeOutlined,
@@ -12,13 +12,14 @@ import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../stores/chatStore';
 import { useProfileStore } from '../../stores/profileStore';
 import type {
-  Evidence,
   ProfileDecision,
   ProfileEmotion,
   ProfileFear,
   ProfileRelationship,
   ProfileValues,
 } from '../../types';
+
+type MemoryTone = 'value' | 'emotion' | 'fear' | 'relationship' | 'decision';
 
 export function MemoryCompass() {
   const navigate = useNavigate();
@@ -69,94 +70,74 @@ export function MemoryCompass() {
 
   return (
     <aside className="memory-compass">
-      <header className="memory-head">
-        <div className="memory-title-block">
-          <span>Memory Compass</span>
-          <h2>灵魂投影</h2>
-          <p>Agent 当前如何理解你</p>
-        </div>
-        <Tag className={`memory-status ${statusTone}`}>{statusText}</Tag>
-      </header>
+      <header className="memory-overview">
+        <div className="memory-overview-main">
+          <div className="memory-overview-copy">
+            <span>Memory Compass</span>
+            <div className="memory-title-row">
+              <h2>灵魂投影</h2>
+              <span className={`memory-status ${statusTone}`}>{statusText}</span>
+            </div>
+            <p>Agent 当前如何理解你</p>
+          </div>
 
-      <section className="memory-current-card">
-        <div className="memory-progress-row">
-          <span>{getCompletenessText()}</span>
-          <strong>{completeness}%</strong>
+          <div className="memory-score">
+            <strong>{completeness}%</strong>
+            <span>{getCompletenessText()}</span>
+          </div>
         </div>
-        <Progress percent={completeness} showInfo={false} strokeColor="#C8845A" railColor="#F0DFC8" size="small" />
-        <p>{isStreaming ? '正在分析本轮对话中的稳定线索。' : `已积累 ${snapshot.total} 条档案线索。`}</p>
-      </section>
+
+        <Progress className="memory-overview-progress" percent={completeness} showInfo={false} strokeColor="#C8845A" railColor="#F0DFC8" size="small" />
+        <p className="memory-overview-note">
+          {isStreaming ? '正在分析本轮对话中的稳定线索。' : `已积累 ${snapshot.total} 条档案线索。`}
+        </p>
+      </header>
 
       {error && <div className="memory-error">{error}</div>}
 
       <div className="memory-scroll custom-scrollbar">
-        <MemoryCard
-          icon={<HeartOutlined />}
-          title="价值观"
-          tone="value"
-          empty="继续聊会慢慢看见你真正重视什么。"
-          active={snapshot.values.length > 0}
-        >
-          <div className="memory-chip-list">
-            {snapshot.values.map((value) => (
-              <span key={value.id} className="memory-chip value" title={formatEvidence(value.evidence)}>
-                {formatValue(value)}
-              </span>
-            ))}
-          </div>
-        </MemoryCard>
-
-        <MemoryCard
-          icon={<SmileOutlined />}
-          title="情绪状态"
-          tone="emotion"
-          empty="还没有明显情绪模式，我会先多听一听。"
-          active={Boolean(snapshot.latestEmotion)}
-        >
-          {snapshot.latestEmotion && <EmotionSummary emotion={snapshot.latestEmotion} />}
-        </MemoryCard>
-
-        <MemoryCard
-          icon={<SafetyCertificateOutlined />}
-          title="恐惧与边界"
-          tone="fear"
-          empty="暂时没有高置信边界，不会贸然下判断。"
-          active={Boolean(snapshot.recentFear)}
-        >
-          {(snapshot.hardBoundaries.length > 0 || snapshot.recentFear) && (
-            <div className="memory-stack">
-              {(snapshot.hardBoundaries.length > 0 ? snapshot.hardBoundaries : [snapshot.recentFear])
-                .filter(Boolean)
-                .map((fear) => (
-                  <BoundaryItem key={fear!.id} fear={fear!} />
-                ))}
-            </div>
-          )}
-        </MemoryCard>
-
-        <MemoryCard
-          icon={<TeamOutlined />}
-          title="关系图谱"
-          tone="relationship"
-          empty="还没有出现足够重要的关系节点。"
-          active={snapshot.relationships.length > 0}
-        >
-          <div className="memory-stack">
-            {snapshot.relationships.map((relationship) => (
-              <RelationshipItem key={relationship.id} relationship={relationship} />
-            ))}
-          </div>
-        </MemoryCard>
-
-        <MemoryCard
-          icon={<BookOutlined />}
-          title="决策历史"
-          tone="decision"
-          empty="还没有形成可复盘的决策记录。"
-          active={Boolean(snapshot.latestDecision)}
-        >
-          {snapshot.latestDecision && <DecisionSummary decision={snapshot.latestDecision} />}
-        </MemoryCard>
+        <div className="memory-insight-list">
+          <MemoryInsightRow
+            icon={<HeartOutlined />}
+            title="价值观"
+            tone="value"
+            status={snapshot.values.length > 0 ? '已记录' : '观察中'}
+            summary={formatValuesSummary(snapshot.values)}
+            active={snapshot.values.length > 0}
+          />
+          <MemoryInsightRow
+            icon={<SmileOutlined />}
+            title="情绪状态"
+            tone="emotion"
+            status={snapshot.latestEmotion ? '已记录' : '观察中'}
+            summary={formatEmotionSummary(snapshot.latestEmotion)}
+            active={Boolean(snapshot.latestEmotion)}
+          />
+          <MemoryInsightRow
+            icon={<SafetyCertificateOutlined />}
+            title="恐惧与边界"
+            tone="fear"
+            status={snapshot.recentFear ? '已记录' : '观察中'}
+            summary={formatFearSummary(snapshot.hardBoundaries, snapshot.recentFear)}
+            active={Boolean(snapshot.recentFear)}
+          />
+          <MemoryInsightRow
+            icon={<TeamOutlined />}
+            title="关系图谱"
+            tone="relationship"
+            status={snapshot.relationships.length > 0 ? '已记录' : '观察中'}
+            summary={formatRelationshipSummary(snapshot.relationships)}
+            active={snapshot.relationships.length > 0}
+          />
+          <MemoryInsightRow
+            icon={<BookOutlined />}
+            title="决策历史"
+            tone="decision"
+            status={snapshot.latestDecision ? '已记录' : '观察中'}
+            summary={formatDecisionSummary(snapshot.latestDecision)}
+            active={Boolean(snapshot.latestDecision)}
+          />
+        </div>
       </div>
 
       <footer className="memory-footer">
@@ -168,118 +149,74 @@ export function MemoryCompass() {
   );
 }
 
-function MemoryCard({
+function MemoryInsightRow({
   icon,
   title,
   tone,
-  empty,
+  status,
+  summary,
   active,
-  children,
 }: {
   icon: ReactNode;
   title: string;
-  tone: 'value' | 'emotion' | 'fear' | 'relationship' | 'decision';
-  empty: string;
+  tone: MemoryTone;
+  status: string;
+  summary: string;
   active: boolean;
-  children?: ReactNode;
 }) {
   return (
-    <section className={`memory-card ${tone} ${active ? 'active' : 'empty'}`}>
-      <div className="memory-card-head">
-        <span className="memory-card-icon">{icon}</span>
-        <strong>{title}</strong>
-        <span>{active ? '已记录' : '观察中'}</span>
+    <section className={`memory-insight-row ${tone} ${active ? 'active' : 'empty'}`}>
+      <span className="memory-insight-icon">{icon}</span>
+      <div className="memory-insight-copy">
+        <div className="memory-insight-head">
+          <strong>{title}</strong>
+        </div>
+        <p title={summary}>{summary}</p>
       </div>
-      <div className="memory-card-body">
-        {active && children ? children : <p className="memory-empty-text">{empty}</p>}
-      </div>
+      <span className="memory-insight-status">{status}</span>
     </section>
   );
 }
 
-function EmotionSummary({ emotion }: { emotion: ProfileEmotion }) {
-  return (
-    <div className="memory-summary">
-      <strong>{formatReadableToken(emotion.emotion)}</strong>
-      {emotion.behavior && <p>{formatReadableToken(emotion.behavior)}</p>}
-      <p><span>触发器：</span>{emotion.triggerDesc}</p>
-    </div>
-  );
+function formatValuesSummary(values: ProfileValues[]) {
+  if (!values.length) return '继续聊会慢慢看见你真正重视什么。';
+  return values.map(formatValue).join(' · ');
 }
 
-function BoundaryItem({ fear }: { fear: ProfileFear }) {
-  const label = fear.boundaryType === 'hard' ? '硬边界' : fear.type === 'boundary' ? '边界' : '恐惧';
-
-  return (
-    <article className="memory-boundary-item">
-      <div>
-        <strong>{label}</strong>
-        <span>{formatConfidence(fear.confidence)}</span>
-      </div>
-      <p>{fear.description}</p>
-    </article>
-  );
+function formatEmotionSummary(emotion?: ProfileEmotion) {
+  if (!emotion) return '还没有明显情绪模式，我会先多听一听。';
+  const parts = [
+    formatReadableToken(emotion.emotion),
+    emotion.behavior ? formatReadableToken(emotion.behavior) : '',
+    emotion.triggerDesc ? `触发器：${emotion.triggerDesc}` : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
 }
 
-function RelationshipItem({ relationship }: { relationship: ProfileRelationship }) {
-  return (
-    <article className="memory-person-item">
-      <div>
-        <strong>{relationship.name}</strong>
-        <span>{relationship.role}</span>
-      </div>
-      <Tag className="memory-person-tag">{formatInfluenceLevel(relationship.influenceLevel)}</Tag>
-    </article>
-  );
+function formatFearSummary(boundaries: ProfileFear[], recentFear?: ProfileFear) {
+  const targets = boundaries.length > 0 ? boundaries : recentFear ? [recentFear] : [];
+  if (!targets.length) return '暂时没有高置信边界，不会贸然下判断。';
+  return targets.map((fear) => {
+    const label = fear.boundaryType === 'hard' ? '硬边界' : fear.type === 'boundary' ? '边界' : '恐惧';
+    return `${label}：${fear.description}`;
+  }).join(' · ');
 }
 
-function DecisionSummary({ decision }: { decision: ProfileDecision }) {
-  return (
-    <div className="memory-summary decision">
-      <strong>{decision.topic}</strong>
-      <p><span>选择：</span>{decision.choice}</p>
-    </div>
-  );
+function formatRelationshipSummary(relationships: ProfileRelationship[]) {
+  if (!relationships.length) return '还没有出现足够重要的关系节点。';
+  return relationships.map((relationship) => {
+    const role = relationship.role ? ` / ${relationship.role}` : '';
+    return `${relationship.name}${role} · ${formatInfluenceLevel(relationship.influenceLevel)}`;
+  }).join(' · ');
+}
+
+function formatDecisionSummary(decision?: ProfileDecision) {
+  if (!decision) return '还没有形成可复盘的决策记录。';
+  return decision.choice ? `${decision.topic} · 选择：${decision.choice}` : decision.topic;
 }
 
 function formatValue(value: ProfileValues) {
   return value.preference || value.item;
-}
-
-function formatEvidence(evidence?: Evidence) {
-  const items = normalizeEvidence(evidence);
-  if (!items.length) return '仍在观察中';
-  return `证据：${items.slice(0, 2).join(' / ')}`;
-}
-
-function normalizeEvidence(evidence?: Evidence) {
-  if (!evidence) return [];
-  if (Array.isArray(evidence)) return evidence.filter(Boolean);
-  if (typeof evidence === 'string') {
-    const trimmed = evidence.trim();
-    if (!trimmed || trimmed === '{}' || trimmed === '[]') return [];
-
-    try {
-      const parsed = JSON.parse(trimmed);
-      return normalizeEvidence(parsed);
-    } catch {
-      return [trimmed];
-    }
-  }
-
-  return Object.values(evidence)
-    .flatMap((value) => {
-      if (Array.isArray(value)) return value;
-      if (typeof value === 'string') return value;
-      return [];
-    })
-    .filter(Boolean);
-}
-
-function formatConfidence(confidence?: number) {
-  if (confidence === undefined || confidence < 0.6) return '仍在观察';
-  if (confidence < 0.8) return '待确认';
-  return '较确定';
 }
 
 function formatInfluenceLevel(level: string) {

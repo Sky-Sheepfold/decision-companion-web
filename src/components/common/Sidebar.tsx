@@ -59,15 +59,6 @@ export function Sidebar({ className = '' }: SidebarProps) {
           <strong>决策伙伴</strong>
           <span>安静地记住你</span>
         </div>
-        <button
-          type="button"
-          className="chat-sidebar-icon-button"
-          onClick={resetChat}
-          aria-label="新建对话"
-          disabled={isStreaming}
-        >
-          <FormOutlined />
-        </button>
       </header>
 
       <button type="button" className="chat-new-thread" onClick={resetChat} disabled={isStreaming}>

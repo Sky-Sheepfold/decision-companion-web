@@ -17,6 +17,7 @@ export function ChatPage() {
   const { profile, fetchProfile } = useProfileStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(false);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
@@ -62,10 +63,25 @@ export function ChatPage() {
     sessionStorage.setItem('chatCount', String(chatCount + 1));
   };
 
+  const handleSidebarToggle = () => {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+      setIsDesktopSidebarOpen((isOpen) => !isOpen);
+      return;
+    }
+
+    setIsMobileSidebarOpen(true);
+  };
+
   return (
     <Layout className="chat-root page-fade" hasSider>
-      {/* PC Sider - Standard History Sidebar */}
-      <Sider width={240} breakpoint="lg" collapsedWidth="0" trigger={null} className="chat-left-sider hidden lg:block">
+      <Sider
+        width={260}
+        collapsedWidth={0}
+        collapsed={!isDesktopSidebarOpen}
+        trigger={null}
+        aria-hidden={!isDesktopSidebarOpen}
+        className={`chat-left-sider hidden lg:block ${isDesktopSidebarOpen ? 'is-open' : 'is-closed'}`}
+      >
         <Sidebar />
       </Sider>
 
@@ -85,7 +101,9 @@ export function ChatPage() {
       <Layout className="chat-app-area">
         <ChatHeader
           showMenuButton
-          onMenuClick={() => setIsMobileSidebarOpen(true)}
+          isMenuActive={isDesktopSidebarOpen || isMobileSidebarOpen}
+          menuButtonLabel={isDesktopSidebarOpen ? '隐藏历史对话' : '打开历史对话'}
+          onMenuClick={handleSidebarToggle}
         />
 
         <div className="chat-board">

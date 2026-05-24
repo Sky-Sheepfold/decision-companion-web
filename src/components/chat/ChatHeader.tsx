@@ -6,10 +6,17 @@ const { Title } = Typography;
 
 interface ChatHeaderProps {
   showMenuButton?: boolean;
+  isMenuActive?: boolean;
+  menuButtonLabel?: string;
   onMenuClick?: () => void;
 }
 
-export function ChatHeader({ showMenuButton = false, onMenuClick }: ChatHeaderProps) {
+export function ChatHeader({
+  showMenuButton = false,
+  isMenuActive = false,
+  menuButtonLabel = '打开历史对话',
+  onMenuClick,
+}: ChatHeaderProps) {
   const navigate = useNavigate();
 
   return (
@@ -20,8 +27,9 @@ export function ChatHeader({ showMenuButton = false, onMenuClick }: ChatHeaderPr
             type="text"
             icon={<MenuOutlined />}
             onClick={onMenuClick}
-            aria-label="打开历史对话"
-            className="lg:hidden text-[18px] text-[var(--color-text)] hover:bg-[var(--color-border)]"
+            aria-label={menuButtonLabel}
+            aria-pressed={isMenuActive}
+            className={`chat-menu-toggle text-[18px] text-[var(--color-text)] hover:bg-[var(--color-border)] ${isMenuActive ? 'is-active' : ''}`}
           />
         )}
         <div className="min-w-0 flex items-center gap-3">
