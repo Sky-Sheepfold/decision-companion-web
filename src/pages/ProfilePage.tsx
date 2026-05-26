@@ -291,42 +291,46 @@ function DecisionsCard({ decisions, delay }: { decisions: ProfileDecision[]; del
     <ProfileCard title={<span className="text-[#0F6E56]"><ClockCircleOutlined className="mr-2" />决策时间轴</span>} description="历史的选择与复盘" delay={delay}>
       {decisions.length === 0 ? <EmptyText /> : (
         <div className="profile-decision-list">
-          {decisions.map((decision) => (
-            <article key={decision.id} className="profile-decision-row">
-              <div className="profile-decision-dot">
-                {decision.satisfaction && decision.satisfaction > 3 ? <CheckCircleOutlined /> : <ClockCircleOutlined />}
-              </div>
-              <div className="profile-item-content">
-                <div className="profile-item-head">
-                  <strong className="profile-readable-text">{decision.topic}</strong>
-                  {decision.decisionDate && <span className="profile-date">{decision.decisionDate}</span>}
+          {decisions.map((decision) => {
+            const tags = normalizeTags(decision.tags);
+
+            return (
+              <article key={decision.id} className="profile-decision-row">
+                <div className="profile-decision-dot">
+                  {decision.satisfaction && decision.satisfaction > 3 ? <CheckCircleOutlined /> : <ClockCircleOutlined />}
                 </div>
-                <div className="profile-choice-block">
-                  <span>最终选择：</span>{decision.choice}
+                <div className="profile-item-content">
+                  <div className="profile-item-head">
+                    <strong className="profile-readable-text">{decision.topic}</strong>
+                    {decision.decisionDate && <span className="profile-date">{decision.decisionDate}</span>}
+                  </div>
+                  <div className="profile-choice-block">
+                    <span>最终选择：</span>{decision.choice}
+                  </div>
+                  {decision.reason && (
+                    <div className="profile-readable-text text-[13px] text-[#6A5A4B]">
+                      <span className="text-[#B09880]">当时理由：</span>{decision.reason}
+                    </div>
+                  )}
+                  {tags.length > 0 && (
+                    <div className="profile-tag-row">
+                      {tags.map((tag, index) => (
+                        <Tag key={`${tag}-${index}`} className="!m-0 !border-[#CFE7DC] !bg-[#E8F5EE] !text-[#0F6E56] !rounded-full">
+                          {tag}
+                        </Tag>
+                      ))}
+                    </div>
+                  )}
+                  {decision.outcome && (
+                    <div className="profile-outcome-row">
+                      <span><span className="text-[#0F6E56]">事后反馈：</span>{decision.outcome}</span>
+                      {decision.satisfaction && <SatisfactionBars value={decision.satisfaction} />}
+                    </div>
+                  )}
                 </div>
-                {decision.reason && (
-                  <div className="profile-readable-text text-[13px] text-[#6A5A4B]">
-                    <span className="text-[#B09880]">当时理由：</span>{decision.reason}
-                  </div>
-                )}
-                {decision.tags?.length > 0 && (
-                  <div className="profile-tag-row">
-                    {decision.tags.map((tag) => (
-                      <Tag key={tag} className="!m-0 !border-[#CFE7DC] !bg-[#E8F5EE] !text-[#0F6E56] !rounded-full">
-                        {tag}
-                      </Tag>
-                    ))}
-                  </div>
-                )}
-                {decision.outcome && (
-                  <div className="profile-outcome-row">
-                    <span><span className="text-[#0F6E56]">事后反馈：</span>{decision.outcome}</span>
-                    {decision.satisfaction && <SatisfactionBars value={decision.satisfaction} />}
-                  </div>
-                )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
     </ProfileCard>
@@ -412,6 +416,24 @@ function normalizeEvidence(evidence?: Evidence) {
       return [];
     })
     .filter(Boolean);
+}
+
+function normalizeTags(tags?: ProfileDecision['tags']) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.filter(Boolean);
+
+  const trimmed = tags.trim();
+  if (!trimmed || trimmed === '[]') return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return normalizeTags(parsed);
+  } catch {
+    return trimmed
+      .split(/[,，、]+/)
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  }
 }
 
 function getConfidenceText(confidence?: number) {

@@ -37,7 +37,7 @@ export interface ProfileDecision {
   reason: string;
   outcome: string;
   satisfaction: number;
-  tags: string[];
+  tags: string[] | string | null;
   decisionDate: string;
   createdAt: string;
 }
