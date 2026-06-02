@@ -1235,6 +1235,35 @@ button:disabled {
   line-height: 1.6;
 }
 
+.memory-pending-callout {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  border: 1px solid #E8D8C8;
+  border-radius: 10px;
+  background: #FFF8EF;
+  padding: 8px 9px;
+  color: #A06040;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.memory-pending-callout > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-pending-callout .ant-btn {
+  height: 24px;
+  padding: 0 7px;
+  color: #A06040;
+  font-size: 12px;
+}
+
 .memory-scroll {
   flex: 1;
   min-height: 0;
@@ -1396,6 +1425,191 @@ button:disabled {
   width: min(100%, 1120px);
   margin: 0 auto;
   padding: 32px 24px;
+}
+
+.profile-pending-panel {
+  margin-bottom: 18px;
+  border: 1px solid #E8D8C8;
+  border-radius: 16px;
+  background: #FFFDF9;
+  padding: 18px;
+  box-shadow: 0 14px 36px rgba(106, 64, 32, 0.04);
+}
+
+.profile-pending-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.profile-pending-head h2 {
+  margin: 0;
+  color: #4A3C31;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.profile-governance-error {
+  margin-bottom: 10px;
+  border: 1px solid #F5D5CB;
+  border-radius: 10px;
+  background: #FAECE7;
+  padding: 8px 10px;
+  color: #993C1D;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.profile-pending-empty {
+  border-radius: 10px;
+  background: #FAF6F1;
+  padding: 11px 12px;
+  color: #9B8069;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.profile-pending-list {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-pending-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  border: 1px solid #EDE0D4;
+  border-radius: 13px;
+  background: #FFFCF8;
+  padding: 13px;
+}
+
+.profile-pending-item.sensitive {
+  border-color: #F5D5CB;
+  background: #FFF7F3;
+}
+
+.profile-pending-main {
+  min-width: 0;
+}
+
+.profile-pending-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+  color: #B09880;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.profile-memory-type-tag {
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #F0DFC8 !important;
+  color: #A06040 !important;
+  font-size: 12px;
+}
+
+.profile-pending-item h3 {
+  margin: 0;
+  color: #4A3C31;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.profile-pending-item p {
+  margin: 4px 0 0;
+  color: #6A5A4B;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.profile-compact-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.profile-compact-actions .ant-btn {
+  border-radius: 9px;
+  color: #A06040;
+  font-size: 12px;
+}
+
+.profile-compact-actions.formal {
+  margin-top: 10px;
+  justify-content: flex-start;
+}
+
+.profile-compact-actions.formal .ant-btn {
+  height: 26px;
+  padding: 0 7px;
+  color: #9B8069;
+}
+
+.profile-compact-actions.danger .ant-btn {
+  color: #A64A2F;
+}
+
+.profile-sensitive-evidence {
+  margin-top: 9px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.65);
+  padding: 7px 9px;
+  color: #A64A2F;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.profile-sensitive-evidence summary {
+  cursor: pointer;
+  color: #C87E6A;
+  font-weight: 600;
+}
+
+.profile-sensitive-evidence-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.profile-sensitive-evidence-list div {
+  overflow-wrap: anywhere;
+}
+
+.profile-edit-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.profile-edit-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-edit-form label > span {
+  color: #6A5A4B;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-edit-form .ant-input,
+.profile-edit-form .ant-input-affix-wrapper,
+.profile-edit-form .ant-input-outlined {
+  border-radius: 10px;
 }
 
 .profile-summary {
@@ -1913,6 +2127,14 @@ button:disabled {
   .profile-summary-panel {
     max-width: none;
   }
+
+  .profile-pending-item {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-compact-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1985,9 +2207,14 @@ button:disabled {
   }
 
   .profile-summary,
-  .profile-section-card {
+  .profile-section-card,
+  .profile-pending-panel {
     border-radius: 14px;
     padding: 18px;
+  }
+
+  .profile-pending-head {
+    align-items: center;
   }
 
   .profile-summary h1 {

@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Spin, Typography, Space, Empty, Progress, Tag, Tooltip } from 'antd';
+import { App as AntApp, Button, Spin, Typography, Space, Empty, Progress, Tag, Tooltip, Modal, Input, Popconfirm } from 'antd';
 import {
   HeartOutlined,
   LeftOutlined,
@@ -11,10 +11,15 @@ import {
   ClockCircleOutlined,
   BranchesOutlined,
   SmileOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useProfileStore } from '../stores/profileStore';
 import type {
   Evidence,
+  ProfileMemoryCandidate,
+  ProfileMemoryCorrectionRequest,
   ProfileValues,
   ProfileDecision,
   ProfileEmotion,
@@ -23,14 +28,112 @@ import type {
 } from '../types';
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+type EditableProfileType = 'value' | 'emotion' | 'relationship' | 'fear' | 'boundary';
+
+interface MemoryEditTarget {
+  id: number;
+  profileType: EditableProfileType;
+  title: string;
+  subject: string;
+  content: string;
+  detail?: string;
+  pending?: boolean;
+}
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { profile, loading, error, completeness, fetchProfile, getCompletenessText } = useProfileStore();
+  const { message } = AntApp.useApp();
+  const {
+    profile,
+    loading,
+    error,
+    completeness,
+    pendingMemories,
+    pendingMemoryCount,
+    governanceLoading,
+    governanceError,
+    fetchProfile,
+    confirmPendingMemory,
+    rejectPendingMemory,
+    correctPendingMemory,
+    correctProfileMemory,
+    deleteProfileMemory,
+    getCompletenessText,
+  } = useProfileStore();
+  const [editingMemory, setEditingMemory] = useState<MemoryEditTarget | null>(null);
+  const [editDraft, setEditDraft] = useState<ProfileMemoryCorrectionRequest>({});
 
   useEffect(() => {
     fetchProfile();
   }, [navigate, fetchProfile]);
+
+  function openEdit(target: MemoryEditTarget) {
+    setEditingMemory(target);
+    setEditDraft({
+      subject: target.subject,
+      content: target.content,
+      detail: target.detail || '',
+      reason: target.pending ? '用户修正后确认' : '用户修正',
+    });
+  }
+
+  async function handleConfirmPending(id: number) {
+    try {
+      await confirmPendingMemory(id);
+      message.success('已确认');
+    } catch {
+      message.error('确认失败，请稍后重试');
+    }
+  }
+
+  async function handleRejectPending(id: number) {
+    try {
+      await rejectPendingMemory(id, '用户不采纳');
+      message.success('已不采纳');
+    } catch {
+      message.error('操作失败，请稍后重试');
+    }
+  }
+
+  async function handleDeleteProfileMemory(profileType: EditableProfileType, id: number) {
+    try {
+      await deleteProfileMemory(profileType, id, '用户删除');
+      message.success('已删除');
+    } catch {
+      message.error('删除失败，请稍后重试');
+    }
+  }
+
+  async function handleSubmitEdit() {
+    if (!editingMemory) return;
+
+    const request = {
+      subject: editDraft.subject?.trim(),
+      content: editDraft.content?.trim(),
+      detail: editDraft.detail?.trim(),
+      reason: editDraft.reason?.trim(),
+    };
+
+    if (!request.subject || !request.content) {
+      message.warning('主题和内容不能为空');
+      return;
+    }
+
+    try {
+      if (editingMemory.pending) {
+        await correctPendingMemory(editingMemory.id, request);
+        message.success('已修正并确认');
+      } else {
+        await correctProfileMemory(editingMemory.profileType, editingMemory.id, request);
+        message.success('已修正');
+      }
+      setEditingMemory(null);
+    } catch {
+      message.error('修正失败，请稍后重试');
+    }
+  }
 
   if (loading) {
     return (
@@ -70,6 +173,16 @@ export function ProfilePage() {
       </div>
 
       <main className="profile-page-shell">
+        <PendingMemoryPanel
+          pendingMemories={pendingMemories}
+          pendingMemoryCount={pendingMemoryCount}
+          loading={governanceLoading}
+          error={governanceError}
+          onConfirm={handleConfirmPending}
+          onReject={handleRejectPending}
+          onEdit={openEdit}
+        />
+
         <ProfileSummary
           completeness={completeness}
           completenessText={getCompletenessText()}
@@ -84,16 +197,63 @@ export function ProfilePage() {
 
         <div className="profile-layout">
           <div className="profile-column">
-            <ValuesCard values={profile.values || []} delay={0} />
-            <FearCard fears={profile.fears || []} delay={120} />
-            <RelationshipsCard relationships={profile.relationships || []} delay={240} />
+            <ValuesCard values={profile.values || []} delay={0} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <FearCard fears={profile.fears || []} delay={120} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <RelationshipsCard relationships={profile.relationships || []} delay={240} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
           </div>
           <div className="profile-main-column">
-            <EmotionsCard emotions={profile.emotions || []} delay={80} />
+            <EmotionsCard emotions={profile.emotions || []} delay={80} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
             <DecisionsCard decisions={profile.decisions || []} delay={180} />
           </div>
         </div>
       </main>
+
+      <Modal
+        title={editingMemory?.pending ? '修正后确认' : '修正档案'}
+        open={Boolean(editingMemory)}
+        onCancel={() => setEditingMemory(null)}
+        onOk={handleSubmitEdit}
+        okText={editingMemory?.pending ? '确认写入' : '保存修正'}
+        cancelText="取消"
+        confirmLoading={governanceLoading}
+        className="profile-memory-edit-modal"
+      >
+        <div className="profile-edit-form">
+          <label>
+            <span>{editingMemory?.profileType === 'relationship' ? '对象' : '主题'}</span>
+            <Input
+              value={editDraft.subject}
+              onChange={(event) => setEditDraft((draft) => ({ ...draft, subject: event.target.value }))}
+              placeholder="主题"
+            />
+          </label>
+          <label>
+            <span>内容</span>
+            <TextArea
+              value={editDraft.content}
+              onChange={(event) => setEditDraft((draft) => ({ ...draft, content: event.target.value }))}
+              autoSize={{ minRows: 3, maxRows: 6 }}
+              placeholder="内容"
+            />
+          </label>
+          <label>
+            <span>{getDetailLabel(editingMemory?.profileType)}</span>
+            <Input
+              value={editDraft.detail}
+              onChange={(event) => setEditDraft((draft) => ({ ...draft, detail: event.target.value }))}
+              placeholder={getDetailLabel(editingMemory?.profileType)}
+            />
+          </label>
+          <label>
+            <span>原因</span>
+            <Input
+              value={editDraft.reason}
+              onChange={(event) => setEditDraft((draft) => ({ ...draft, reason: event.target.value }))}
+              placeholder="可选"
+            />
+          </label>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -150,6 +310,94 @@ function StatItem({ label, value }: { label: string; value: number }) {
   );
 }
 
+function PendingMemoryPanel({
+  pendingMemories,
+  pendingMemoryCount,
+  loading,
+  error,
+  onConfirm,
+  onReject,
+  onEdit,
+}: {
+  pendingMemories: ProfileMemoryCandidate[];
+  pendingMemoryCount: number;
+  loading: boolean;
+  error: string | null;
+  onConfirm: (id: number) => void;
+  onReject: (id: number) => void;
+  onEdit: (target: MemoryEditTarget) => void;
+}) {
+  return (
+    <section className="profile-pending-panel">
+      <div className="profile-pending-head">
+        <div>
+          <div className="profile-kicker">待确认记忆</div>
+          <h2>{pendingMemoryCount > 0 ? `${pendingMemoryCount} 条需要过目` : '暂无待确认线索'}</h2>
+        </div>
+        {loading && <Spin size="small" />}
+      </div>
+
+      {error && <div className="profile-governance-error">{error}</div>}
+
+      {pendingMemories.length === 0 ? (
+        <div className="profile-pending-empty">新的画像线索会先放在这里。</div>
+      ) : (
+        <div className="profile-pending-list">
+          {pendingMemories.map((candidate) => {
+            const sensitive = isSensitiveProfileType(candidate.profileType);
+
+            return (
+              <article key={candidate.id} className={`profile-pending-item ${sensitive ? 'sensitive' : ''}`}>
+                <div className="profile-pending-main">
+                  <div className="profile-pending-meta">
+                    <Tag className="profile-memory-type-tag">{getProfileTypeLabel(candidate.profileType)}</Tag>
+                    <ConfidenceBadge confidence={toNumber(candidate.confidence)} danger={sensitive} />
+                    <span>{formatExpiry(candidate.expiresAt)}</span>
+                  </div>
+                  <h3>{candidate.subject}</h3>
+                  <p>{candidate.content}</p>
+                  {candidate.detail && <div className="profile-item-subtle">{candidate.detail}</div>}
+                  <SensitiveEvidence evidence={candidate.evidence} sensitive={sensitive} />
+                </div>
+                <div className="profile-compact-actions">
+                  <Button size="small" icon={<CheckCircleOutlined />} onClick={() => onConfirm(candidate.id)}>
+                    确认
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => onEdit({
+                      id: candidate.id,
+                      profileType: normalizeEditableProfileType(candidate.profileType),
+                      title: candidate.subject,
+                      subject: candidate.subject,
+                      content: candidate.content,
+                      detail: candidate.detail || '',
+                      pending: true,
+                    })}
+                  >
+                    修正
+                  </Button>
+                  <Popconfirm
+                    title="不采纳这条记忆？"
+                    okText="不采纳"
+                    cancelText="取消"
+                    onConfirm={() => onReject(candidate.id)}
+                  >
+                    <Button size="small" icon={<CloseCircleOutlined />}>
+                      不采纳
+                    </Button>
+                  </Popconfirm>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ProfileCard({
   title,
   description,
@@ -172,7 +420,17 @@ function ProfileCard({
   );
 }
 
-function ValuesCard({ values, delay }: { values: ProfileValues[]; delay: number }) {
+function ValuesCard({
+  values,
+  delay,
+  onEdit,
+  onDelete,
+}: {
+  values: ProfileValues[];
+  delay: number;
+  onEdit: (target: MemoryEditTarget) => void;
+  onDelete: (profileType: EditableProfileType, id: number) => void;
+}) {
   return (
     <ProfileCard title={<span className="text-[#A06040]"><HeartOutlined className="mr-2" />价值观引擎</span>} description="驱动你选择的核心动力" delay={delay}>
       {values.length === 0 ? <EmptyText /> : (
@@ -187,6 +445,16 @@ function ValuesCard({ values, delay }: { values: ProfileValues[]; delay: number 
                 <ConfidenceBadge confidence={value.confidence} />
               </div>
               <EvidenceList evidence={value.evidence} />
+              <MemoryGovernanceActions
+                onEdit={() => onEdit({
+                  id: value.id,
+                  profileType: 'value',
+                  title: value.item,
+                  subject: value.item,
+                  content: value.preference,
+                })}
+                onDelete={() => onDelete('value', value.id)}
+              />
             </article>
           ))}
         </div>
@@ -195,7 +463,17 @@ function ValuesCard({ values, delay }: { values: ProfileValues[]; delay: number 
   );
 }
 
-function FearCard({ fears, delay }: { fears: ProfileFear[]; delay: number }) {
+function FearCard({
+  fears,
+  delay,
+  onEdit,
+  onDelete,
+}: {
+  fears: ProfileFear[];
+  delay: number;
+  onEdit: (target: MemoryEditTarget) => void;
+  onDelete: (profileType: EditableProfileType, id: number) => void;
+}) {
   return (
     <ProfileCard title={<span className="text-[#993C1D]"><SafetyCertificateOutlined className="mr-2" />绝对边界</span>} description="不可触碰的底线与深层恐惧" delay={delay}>
       {fears.length === 0 ? <EmptyText /> : (
@@ -214,6 +492,18 @@ function FearCard({ fears, delay }: { fears: ProfileFear[]; delay: number }) {
                   </div>
                 )}
                 <EvidenceList evidence={fear.evidence} danger />
+                <MemoryGovernanceActions
+                  danger
+                  onEdit={() => onEdit({
+                    id: fear.id,
+                    profileType: fear.type,
+                    title: fear.description,
+                    subject: fear.description,
+                    content: fear.manifestation,
+                    detail: fear.boundaryType || '',
+                  })}
+                  onDelete={() => onDelete(fear.type, fear.id)}
+                />
               </div>
             </li>
           ))}
@@ -223,7 +513,17 @@ function FearCard({ fears, delay }: { fears: ProfileFear[]; delay: number }) {
   );
 }
 
-function RelationshipsCard({ relationships, delay }: { relationships: ProfileRelationship[]; delay: number }) {
+function RelationshipsCard({
+  relationships,
+  delay,
+  onEdit,
+  onDelete,
+}: {
+  relationships: ProfileRelationship[];
+  delay: number;
+  onEdit: (target: MemoryEditTarget) => void;
+  onDelete: (profileType: EditableProfileType, id: number) => void;
+}) {
   return (
     <ProfileCard title={<span className="text-[#A07050]"><BranchesOutlined className="mr-2" />关系引力网</span>} description="重要节点与能量场" delay={delay}>
       {relationships.length === 0 ? <EmptyText /> : (
@@ -245,6 +545,17 @@ function RelationshipsCard({ relationships, delay }: { relationships: ProfileRel
                 </div>
                 {rel.influenceStyle && <div className="profile-item-subtle">{rel.influenceStyle}</div>}
                 {rel.note && <div className="profile-readable-text mt-2 text-[13px] text-[#6A5A4B]">{rel.note}</div>}
+                <MemoryGovernanceActions
+                  onEdit={() => onEdit({
+                    id: rel.id,
+                    profileType: 'relationship',
+                    title: rel.name,
+                    subject: rel.name,
+                    content: rel.note || rel.influenceStyle || formatInfluenceLevel(rel.influenceLevel),
+                    detail: rel.role,
+                  })}
+                  onDelete={() => onDelete('relationship', rel.id)}
+                />
               </div>
             </article>
           ))}
@@ -254,7 +565,17 @@ function RelationshipsCard({ relationships, delay }: { relationships: ProfileRel
   );
 }
 
-function EmotionsCard({ emotions, delay }: { emotions: ProfileEmotion[]; delay: number }) {
+function EmotionsCard({
+  emotions,
+  delay,
+  onEdit,
+  onDelete,
+}: {
+  emotions: ProfileEmotion[];
+  delay: number;
+  onEdit: (target: MemoryEditTarget) => void;
+  onDelete: (profileType: EditableProfileType, id: number) => void;
+}) {
   return (
     <ProfileCard title={<span className="text-[#C8845A]"><SmileOutlined className="mr-2" />情绪雷达</span>} description="心理能量起伏特征" delay={delay}>
       {emotions.length === 0 ? <EmptyText /> : (
@@ -277,6 +598,17 @@ function EmotionsCard({ emotions, delay }: { emotions: ProfileEmotion[]; delay: 
                     {emotion.agentNote}
                   </div>
                 )}
+                <MemoryGovernanceActions
+                  onEdit={() => onEdit({
+                    id: emotion.id,
+                    profileType: 'emotion',
+                    title: emotion.emotion,
+                    subject: emotion.emotion,
+                    content: emotion.behavior,
+                    detail: emotion.triggerDesc,
+                  })}
+                  onDelete={() => onDelete('emotion', emotion.id)}
+                />
               </div>
             </article>
           ))}
@@ -334,6 +666,55 @@ function DecisionsCard({ decisions, delay }: { decisions: ProfileDecision[]; del
         </div>
       )}
     </ProfileCard>
+  );
+}
+
+function MemoryGovernanceActions({
+  danger = false,
+  onEdit,
+  onDelete,
+}: {
+  danger?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className={`profile-compact-actions formal ${danger ? 'danger' : ''}`}>
+      <Button size="small" type="text" icon={<EditOutlined />} onClick={onEdit}>
+        修正
+      </Button>
+      <Popconfirm
+        title="删除这条档案？"
+        okText="删除"
+        cancelText="取消"
+        onConfirm={onDelete}
+      >
+        <Button size="small" type="text" icon={<DeleteOutlined />}>
+          删除
+        </Button>
+      </Popconfirm>
+    </div>
+  );
+}
+
+function SensitiveEvidence({ evidence, sensitive }: { evidence?: Evidence; sensitive: boolean }) {
+  const items = normalizeEvidence(evidence);
+
+  if (!items.length) return null;
+
+  if (!sensitive) {
+    return <EvidenceList evidence={items} />;
+  }
+
+  return (
+    <details className="profile-sensitive-evidence">
+      <summary>查看依据</summary>
+      <div className="profile-sensitive-evidence-list">
+        {items.slice(0, 2).map((item, index) => (
+          <div key={`${item}-${index}`}>{item}</div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -444,6 +825,56 @@ function getConfidenceText(confidence?: number) {
 
 function formatReadableToken(value: string) {
   return value.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+}
+
+function normalizeEditableProfileType(profileType: string): EditableProfileType {
+  if (profileType === 'emotion') return 'emotion';
+  if (profileType === 'relationship') return 'relationship';
+  if (profileType === 'fear') return 'fear';
+  if (profileType === 'boundary') return 'boundary';
+  return 'value';
+}
+
+function isSensitiveProfileType(profileType: string) {
+  return profileType === 'fear' || profileType === 'boundary';
+}
+
+function getProfileTypeLabel(profileType: string) {
+  const labels: Record<string, string> = {
+    value: '价值',
+    values: '价值',
+    emotion: '情绪',
+    relationship: '关系',
+    fear: '恐惧',
+    boundary: '边界',
+  };
+
+  return labels[profileType] || '画像';
+}
+
+function getDetailLabel(profileType?: EditableProfileType) {
+  if (profileType === 'emotion') return '触发器';
+  if (profileType === 'relationship') return '角色';
+  if (profileType === 'boundary') return '边界类型';
+  return '补充';
+}
+
+function toNumber(value?: number | string | null) {
+  if (value === null || value === undefined) return undefined;
+  const numberValue = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+function formatExpiry(expiresAt?: string | null) {
+  if (!expiresAt) return '有效期未标注';
+
+  const expiresTime = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresTime)) return '有效期未标注';
+
+  const diffDays = Math.ceil((expiresTime - Date.now()) / 86400000);
+  if (diffDays <= 0) return '即将过期';
+  if (diffDays === 1) return '剩余 1 天';
+  return `剩余 ${diffDays} 天`;
 }
 
 function EmptyText({ children = '档案仍在观察与积累中...' }: { children?: React.ReactNode }) {

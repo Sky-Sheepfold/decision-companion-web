@@ -7,6 +7,7 @@ import {
   SafetyCertificateOutlined,
   SmileOutlined,
   TeamOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../stores/chatStore';
@@ -29,6 +30,7 @@ export function MemoryCompass() {
     loading,
     error,
     completeness,
+    pendingMemoryCount,
     getCompletenessText,
   } = useProfileStore();
 
@@ -79,6 +81,16 @@ export function MemoryCompass() {
       </header>
 
       {error && <div className="memory-error">{error}</div>}
+
+      {pendingMemoryCount > 0 && (
+        <div className="memory-pending-callout">
+          <CheckCircleOutlined />
+          <span>{pendingMemoryCount} 条记忆待确认</span>
+          <Button size="small" type="text" onClick={() => navigate('/profile')}>
+            处理
+          </Button>
+        </div>
+      )}
 
       <div className="memory-scroll custom-scrollbar">
         <div className="memory-insight-list">

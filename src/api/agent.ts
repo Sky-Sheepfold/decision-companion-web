@@ -12,6 +12,11 @@ import type {
   ProfileEmotion,
   ProfileRelationship,
   ProfileFear,
+  ProfileMemoryAuditLog,
+  ProfileMemoryCandidate,
+  ProfileMemoryCorrectionRequest,
+  ProfileMemoryGovernanceResult,
+  ProfileMemoryReasonRequest,
   ChatConversation,
   ChatResponse,
   PersistedChatMessage
@@ -248,6 +253,66 @@ export const profileApi = {
 
   getFears: (): Promise<ProfileFear[]> => {
     return fetchApi('/profile/fears');
+  },
+
+  getPendingMemories: (): Promise<ProfileMemoryCandidate[]> => {
+    return fetchApi('/profile/pending-memories');
+  },
+
+  getMemoryAudits: (limit?: number): Promise<ProfileMemoryAuditLog[]> => {
+    const params = new URLSearchParams();
+    if (limit !== undefined) {
+      params.set('limit', String(limit));
+    }
+    const query = params.toString();
+    return fetchApi(`/profile/memory-audits${query ? `?${query}` : ''}`);
+  },
+
+  confirmPendingMemory: (id: number): Promise<ProfileMemoryGovernanceResult> => {
+    return fetchApi(`/profile/pending-memories/${id}/confirm`, {
+      method: 'POST',
+    });
+  },
+
+  rejectPendingMemory: (id: number, reason?: string): Promise<ProfileMemoryGovernanceResult> => {
+    const request: ProfileMemoryReasonRequest | undefined = reason ? { reason } : undefined;
+    return fetchApi(`/profile/pending-memories/${id}/reject`, {
+      method: 'POST',
+      ...(request ? { body: JSON.stringify(request) } : {}),
+    });
+  },
+
+  correctPendingMemory: (
+    id: number,
+    request: ProfileMemoryCorrectionRequest
+  ): Promise<ProfileMemoryGovernanceResult> => {
+    return fetchApi(`/profile/pending-memories/${id}/correct`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  correctProfileMemory: (
+    profileType: string,
+    id: number,
+    request: ProfileMemoryCorrectionRequest
+  ): Promise<ProfileMemoryGovernanceResult> => {
+    return fetchApi(`/profile/${profileType}/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    });
+  },
+
+  deleteProfileMemory: (
+    profileType: string,
+    id: number,
+    reason?: string
+  ): Promise<ProfileMemoryGovernanceResult> => {
+    const request: ProfileMemoryReasonRequest | undefined = reason ? { reason } : undefined;
+    return fetchApi(`/profile/${profileType}/${id}`, {
+      method: 'DELETE',
+      ...(request ? { body: JSON.stringify(request) } : {}),
+    });
   },
 };
 

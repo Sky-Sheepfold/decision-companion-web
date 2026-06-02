@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { UserProfile } from '../types';
+import type { ProfileMemoryCandidate, ProfileMemoryCorrectionRequest, UserProfile } from '../types';
 import { ApiCode, getAuthToken, isApiError, profileApi } from '../api/agent';
 import { readSessionCache, removeSessionCache, writeSessionCache } from '../utils/sessionCache';
 
@@ -16,10 +16,20 @@ interface ProfileState {
   profile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  pendingMemories: ProfileMemoryCandidate[];
+  pendingMemoryCount: number;
+  governanceLoading: boolean;
+  governanceError: string | null;
   completeness: number;
   chatCount: number;
   lastFetchedAt: number;
   fetchProfile: (options?: FetchProfileOptions) => Promise<void>;
+  fetchPendingMemories: () => Promise<void>;
+  confirmPendingMemory: (id: number) => Promise<void>;
+  rejectPendingMemory: (id: number, reason?: string) => Promise<void>;
+  correctPendingMemory: (id: number, request: ProfileMemoryCorrectionRequest) => Promise<void>;
+  correctProfileMemory: (profileType: string, id: number, request: ProfileMemoryCorrectionRequest) => Promise<void>;
+  deleteProfileMemory: (profileType: string, id: number, reason?: string) => Promise<void>;
   getCompletenessText: () => string;
 }
 
@@ -27,6 +37,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   profile: null,
   loading: false,
   error: null,
+  pendingMemories: [],
+  pendingMemoryCount: 0,
+  governanceLoading: false,
+  governanceError: null,
   completeness: 0,
   chatCount: 0,
   lastFetchedAt: 0,
@@ -48,6 +62,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       : null;
     if (cachedProfile && hasProfileRecords(cachedProfile)) {
       setProfileSnapshot(cachedProfile, set);
+      await get().fetchPendingMemories();
       return;
     }
 
@@ -61,15 +76,20 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           removeSessionCache(PROFILE_SESSION_CACHE_KEY);
         }
         setProfileSnapshot(data, set);
+        await get().fetchPendingMemories();
       } catch (err) {
         if (isApiError(err) && err.code === ApiCode.USER_NOT_FOUND) {
           removeSessionCache(PROFILE_SESSION_CACHE_KEY);
           set({
             profile: null,
+            pendingMemories: [],
+            pendingMemoryCount: 0,
             completeness: 0,
             chatCount: parseInt(sessionStorage.getItem('chatCount') || '0', 10),
             error: null,
             loading: false,
+            governanceLoading: false,
+            governanceError: null,
             lastFetchedAt: Date.now(),
           });
           return;
@@ -79,6 +99,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         set({
           error: '加载档案失败，请稍后重试',
           loading: false,
+          governanceLoading: false,
         });
       }
     })().finally(() => {
@@ -86,6 +107,45 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     });
 
     return profileRequest;
+  },
+
+  fetchPendingMemories: async () => {
+    try {
+      set({ governanceLoading: true, governanceError: null });
+      const pendingMemories = await profileApi.getPendingMemories();
+      set({
+        pendingMemories,
+        pendingMemoryCount: pendingMemories.length,
+        governanceLoading: false,
+        governanceError: null,
+      });
+    } catch (err) {
+      console.error('Fetch pending memories error:', err);
+      set({
+        governanceLoading: false,
+        governanceError: '加载待确认记忆失败，请稍后重试',
+      });
+    }
+  },
+
+  confirmPendingMemory: async (id: number) => {
+    await runGovernanceMutation(set, get, () => profileApi.confirmPendingMemory(id));
+  },
+
+  rejectPendingMemory: async (id: number, reason?: string) => {
+    await runGovernanceMutation(set, get, () => profileApi.rejectPendingMemory(id, reason));
+  },
+
+  correctPendingMemory: async (id: number, request: ProfileMemoryCorrectionRequest) => {
+    await runGovernanceMutation(set, get, () => profileApi.correctPendingMemory(id, request));
+  },
+
+  correctProfileMemory: async (profileType: string, id: number, request: ProfileMemoryCorrectionRequest) => {
+    await runGovernanceMutation(set, get, () => profileApi.correctProfileMemory(profileType, id, request));
+  },
+
+  deleteProfileMemory: async (profileType: string, id: number, reason?: string) => {
+    await runGovernanceMutation(set, get, () => profileApi.deleteProfileMemory(profileType, id, reason));
   },
 
   getCompletenessText: () => {
@@ -139,10 +199,31 @@ function setProfileSnapshot(
 
   set({
     profile: data,
+    pendingMemoryCount: data.pendingMemoryCount ?? 0,
     completeness,
     chatCount,
     loading: false,
     error: null,
     lastFetchedAt: Date.now(),
   });
+}
+
+async function runGovernanceMutation(
+  set: (partial: ProfileState | Partial<ProfileState> | ((state: ProfileState) => ProfileState | Partial<ProfileState>)) => void,
+  get: () => ProfileState,
+  mutate: () => Promise<unknown>
+) {
+  try {
+    set({ governanceLoading: true, governanceError: null });
+    await mutate();
+    removeSessionCache(PROFILE_SESSION_CACHE_KEY);
+    await get().fetchProfile({ force: true });
+  } catch (err) {
+    console.error('Memory governance mutation error:', err);
+    set({
+      governanceLoading: false,
+      governanceError: '记忆更新失败，请稍后重试',
+    });
+    throw err;
+  }
 }

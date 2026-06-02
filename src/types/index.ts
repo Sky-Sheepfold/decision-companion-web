@@ -75,6 +75,57 @@ export interface ProfileFear {
   updatedAt: string;
 }
 
+export interface ProfileMemoryCandidate {
+  id: number;
+  userId: number;
+  profileType: string;
+  subject: string;
+  content: string;
+  detail?: string | null;
+  confidence?: number | string | null;
+  evidence?: Evidence;
+  source?: string | null;
+  sourceConversationId?: number | null;
+  status: string;
+  expiresAt?: string | null;
+  handledAt?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface ProfileMemoryAuditLog {
+  id: number;
+  userId: number;
+  profileType: string;
+  profileRecordId?: number | null;
+  candidateId?: number | null;
+  action: string;
+  beforeSnapshot?: string | null;
+  afterSnapshot?: string | null;
+  reason?: string | null;
+  createdAt: string;
+}
+
+export interface ProfileMemoryGovernanceResult {
+  success: boolean;
+  action: string;
+  profileType?: string | null;
+  profileRecordId?: number | null;
+  candidateId?: number | null;
+  message?: string | null;
+}
+
+export interface ProfileMemoryReasonRequest {
+  reason?: string;
+}
+
+export interface ProfileMemoryCorrectionRequest {
+  subject?: string;
+  content?: string;
+  detail?: string;
+  reason?: string;
+}
+
 export interface UserProfile {
   user: User;
   values: ProfileValues[];
@@ -82,6 +133,7 @@ export interface UserProfile {
   emotions: ProfileEmotion[];
   relationships: ProfileRelationship[];
   fears: ProfileFear[];
+  pendingMemoryCount?: number;
 }
 
 export interface ChatMessage {
