@@ -7,6 +7,7 @@ const PROFILE_CACHE_TTL_MS = 3000;
 export const PROFILE_SESSION_CACHE_KEY = 'decision_companion_profile_cache';
 
 let profileRequest: Promise<void> | null = null;
+let profileStateGeneration = 0;
 
 interface FetchProfileOptions {
   force?: boolean;
@@ -30,6 +31,7 @@ interface ProfileState {
   correctPendingMemory: (id: number, request: ProfileMemoryCorrectionRequest) => Promise<void>;
   correctProfileMemory: (profileType: string, id: number, request: ProfileMemoryCorrectionRequest) => Promise<void>;
   deleteProfileMemory: (profileType: string, id: number, reason?: string) => Promise<void>;
+  resetProfileState: () => void;
   getCompletenessText: () => string;
 }
 
@@ -57,6 +59,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
 
     const token = getAuthToken();
+    const requestGeneration = profileStateGeneration;
     const cachedProfile = !options.force
       ? readSessionCache<UserProfile>(PROFILE_SESSION_CACHE_KEY, token, PROFILE_CACHE_TTL_MS)
       : null;
@@ -66,10 +69,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       return;
     }
 
-    profileRequest = (async () => {
+    const request = (async () => {
       try {
         set({ loading: true, error: null });
         const data = await profileApi.getFullProfile();
+        if (!isCurrentProfileRequest(token, requestGeneration)) {
+          return;
+        }
         if (hasProfileRecords(data)) {
           writeSessionCache(PROFILE_SESSION_CACHE_KEY, token, data);
         } else {
@@ -78,6 +84,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         setProfileSnapshot(data, set);
         await get().fetchPendingMemories();
       } catch (err) {
+        if (!isCurrentProfileRequest(token, requestGeneration)) {
+          return;
+        }
+
         if (isApiError(err) && err.code === ApiCode.USER_NOT_FOUND) {
           removeSessionCache(PROFILE_SESSION_CACHE_KEY);
           set({
@@ -103,16 +113,25 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         });
       }
     })().finally(() => {
-      profileRequest = null;
+      if (profileRequest === request) {
+        profileRequest = null;
+      }
     });
 
+    profileRequest = request;
     return profileRequest;
   },
 
   fetchPendingMemories: async () => {
+    const token = getAuthToken();
+    const requestGeneration = profileStateGeneration;
+
     try {
       set({ governanceLoading: true, governanceError: null });
       const pendingMemories = await profileApi.getPendingMemories();
+      if (!isCurrentProfileRequest(token, requestGeneration)) {
+        return;
+      }
       set({
         pendingMemories,
         pendingMemoryCount: pendingMemories.length,
@@ -120,6 +139,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         governanceError: null,
       });
     } catch (err) {
+      if (!isCurrentProfileRequest(token, requestGeneration)) {
+        return;
+      }
+
       console.error('Fetch pending memories error:', err);
       set({
         governanceLoading: false,
@@ -148,6 +171,24 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     await runGovernanceMutation(set, get, () => profileApi.deleteProfileMemory(profileType, id, reason));
   },
 
+  resetProfileState: () => {
+    profileStateGeneration += 1;
+    profileRequest = null;
+    removeSessionCache(PROFILE_SESSION_CACHE_KEY);
+    set({
+      profile: null,
+      loading: false,
+      error: null,
+      pendingMemories: [],
+      pendingMemoryCount: 0,
+      governanceLoading: false,
+      governanceError: null,
+      completeness: 0,
+      chatCount: 0,
+      lastFetchedAt: 0,
+    });
+  },
+
   getCompletenessText: () => {
     const { completeness } = get();
     if (completeness <= 30) return '刚刚认识你';
@@ -156,6 +197,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     return '已经很了解你了';
   },
 }));
+
+function isCurrentProfileRequest(token: string | null, generation: number) {
+  return generation === profileStateGeneration && token === getAuthToken();
+}
 
 export function countProfileRecords(data: UserProfile | null | undefined) {
   if (!data) return 0;

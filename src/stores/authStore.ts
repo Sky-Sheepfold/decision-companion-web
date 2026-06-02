@@ -3,7 +3,7 @@ import { authApi, clearAuthToken, getApiErrorMessage, getAuthToken, setAuthToken
 import type { AuthUser } from '../types';
 import { readSessionCache, removeSessionCache, writeSessionCache } from '../utils/sessionCache';
 import { useChatStore } from './chatStore';
-import { PROFILE_SESSION_CACHE_KEY, useProfileStore } from './profileStore';
+import { useProfileStore } from './profileStore';
 
 const AUTH_CACHE_KEY = 'decision_companion_auth_me_cache';
 const AUTH_CACHE_TTL_MS = 3000;
@@ -30,6 +30,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   initAuth: async () => {
     const token = getAuthToken();
     if (!token) {
+      resetUserScopedState();
       set({ user: null, loading: false, error: null });
       return;
     }
@@ -54,6 +55,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         console.error('Init auth error:', err);
         clearAuthToken();
         removeSessionCache(AUTH_CACHE_KEY);
+        resetUserScopedState();
         set({ user: null, loading: false });
       }
     })().finally(() => {
@@ -130,26 +132,12 @@ function markCachedOnboarded(user: AuthUser | null) {
 
 function resetUserScopedState() {
   sessionStorage.removeItem('chatCount');
-  removeSessionCache(PROFILE_SESSION_CACHE_KEY);
   useChatStore.getState().clearMessages();
-  useProfileStore.setState({
-    profile: null,
-    error: null,
-    completeness: 0,
-    chatCount: 0,
-    lastFetchedAt: 0,
-  });
+  useProfileStore.getState().resetProfileState();
 }
 
 function resetProfileSnapshot() {
-  removeSessionCache(PROFILE_SESSION_CACHE_KEY);
-  useProfileStore.setState({
-    profile: null,
-    loading: false,
-    error: null,
-    completeness: 0,
-    lastFetchedAt: 0,
-  });
+  useProfileStore.getState().resetProfileState();
 }
 
 function requestInitialProfileRefresh() {

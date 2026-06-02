@@ -80,6 +80,8 @@ export function ProfilePage() {
   }
 
   async function handleConfirmPending(id: number) {
+    if (governanceLoading) return;
+
     try {
       await confirmPendingMemory(id);
       message.success('已确认');
@@ -89,6 +91,8 @@ export function ProfilePage() {
   }
 
   async function handleRejectPending(id: number) {
+    if (governanceLoading) return;
+
     try {
       await rejectPendingMemory(id, '用户不采纳');
       message.success('已不采纳');
@@ -98,6 +102,8 @@ export function ProfilePage() {
   }
 
   async function handleDeleteProfileMemory(profileType: EditableProfileType, id: number) {
+    if (governanceLoading) return;
+
     try {
       await deleteProfileMemory(profileType, id, '用户删除');
       message.success('已删除');
@@ -107,7 +113,7 @@ export function ProfilePage() {
   }
 
   async function handleSubmitEdit() {
-    if (!editingMemory) return;
+    if (!editingMemory || governanceLoading) return;
 
     const request = {
       subject: editDraft.subject?.trim(),
@@ -197,12 +203,12 @@ export function ProfilePage() {
 
         <div className="profile-layout">
           <div className="profile-column">
-            <ValuesCard values={profile.values || []} delay={0} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
-            <FearCard fears={profile.fears || []} delay={120} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
-            <RelationshipsCard relationships={profile.relationships || []} delay={240} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <ValuesCard values={profile.values || []} delay={0} disabled={governanceLoading} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <FearCard fears={profile.fears || []} delay={120} disabled={governanceLoading} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <RelationshipsCard relationships={profile.relationships || []} delay={240} disabled={governanceLoading} onDelete={handleDeleteProfileMemory} />
           </div>
           <div className="profile-main-column">
-            <EmotionsCard emotions={profile.emotions || []} delay={80} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
+            <EmotionsCard emotions={profile.emotions || []} delay={80} disabled={governanceLoading} onEdit={openEdit} onDelete={handleDeleteProfileMemory} />
             <DecisionsCard decisions={profile.decisions || []} delay={180} />
           </div>
         </div>
@@ -216,6 +222,7 @@ export function ProfilePage() {
         okText={editingMemory?.pending ? '确认写入' : '保存修正'}
         cancelText="取消"
         confirmLoading={governanceLoading}
+        okButtonProps={{ disabled: governanceLoading }}
         className="profile-memory-edit-modal"
       >
         <div className="profile-edit-form">
@@ -223,6 +230,7 @@ export function ProfilePage() {
             <span>{editingMemory?.profileType === 'relationship' ? '对象' : '主题'}</span>
             <Input
               value={editDraft.subject}
+              disabled={governanceLoading}
               onChange={(event) => setEditDraft((draft) => ({ ...draft, subject: event.target.value }))}
               placeholder="主题"
             />
@@ -231,6 +239,7 @@ export function ProfilePage() {
             <span>内容</span>
             <TextArea
               value={editDraft.content}
+              disabled={governanceLoading}
               onChange={(event) => setEditDraft((draft) => ({ ...draft, content: event.target.value }))}
               autoSize={{ minRows: 3, maxRows: 6 }}
               placeholder="内容"
@@ -240,6 +249,7 @@ export function ProfilePage() {
             <span>{getDetailLabel(editingMemory?.profileType)}</span>
             <Input
               value={editDraft.detail}
+              disabled={governanceLoading}
               onChange={(event) => setEditDraft((draft) => ({ ...draft, detail: event.target.value }))}
               placeholder={getDetailLabel(editingMemory?.profileType)}
             />
@@ -248,6 +258,7 @@ export function ProfilePage() {
             <span>原因</span>
             <Input
               value={editDraft.reason}
+              disabled={governanceLoading}
               onChange={(event) => setEditDraft((draft) => ({ ...draft, reason: event.target.value }))}
               placeholder="可选"
             />
@@ -360,12 +371,13 @@ function PendingMemoryPanel({
                   <SensitiveEvidence evidence={candidate.evidence} sensitive={sensitive} />
                 </div>
                 <div className="profile-compact-actions">
-                  <Button size="small" icon={<CheckCircleOutlined />} onClick={() => onConfirm(candidate.id)}>
+                  <Button size="small" icon={<CheckCircleOutlined />} disabled={loading} loading={loading} onClick={() => onConfirm(candidate.id)}>
                     确认
                   </Button>
                   <Button
                     size="small"
                     icon={<EditOutlined />}
+                    disabled={loading}
                     onClick={() => onEdit({
                       id: candidate.id,
                       profileType: normalizeEditableProfileType(candidate.profileType),
@@ -383,8 +395,10 @@ function PendingMemoryPanel({
                     okText="不采纳"
                     cancelText="取消"
                     onConfirm={() => onReject(candidate.id)}
+                    okButtonProps={{ disabled: loading, loading }}
+                    cancelButtonProps={{ disabled: loading }}
                   >
-                    <Button size="small" icon={<CloseCircleOutlined />}>
+                    <Button size="small" icon={<CloseCircleOutlined />} disabled={loading}>
                       不采纳
                     </Button>
                   </Popconfirm>
@@ -423,11 +437,13 @@ function ProfileCard({
 function ValuesCard({
   values,
   delay,
+  disabled,
   onEdit,
   onDelete,
 }: {
   values: ProfileValues[];
   delay: number;
+  disabled: boolean;
   onEdit: (target: MemoryEditTarget) => void;
   onDelete: (profileType: EditableProfileType, id: number) => void;
 }) {
@@ -446,6 +462,7 @@ function ValuesCard({
               </div>
               <EvidenceList evidence={value.evidence} />
               <MemoryGovernanceActions
+                disabled={disabled}
                 onEdit={() => onEdit({
                   id: value.id,
                   profileType: 'value',
@@ -466,11 +483,13 @@ function ValuesCard({
 function FearCard({
   fears,
   delay,
+  disabled,
   onEdit,
   onDelete,
 }: {
   fears: ProfileFear[];
   delay: number;
+  disabled: boolean;
   onEdit: (target: MemoryEditTarget) => void;
   onDelete: (profileType: EditableProfileType, id: number) => void;
 }) {
@@ -494,6 +513,7 @@ function FearCard({
                 <EvidenceList evidence={fear.evidence} danger />
                 <MemoryGovernanceActions
                   danger
+                  disabled={disabled}
                   onEdit={() => onEdit({
                     id: fear.id,
                     profileType: fear.type,
@@ -516,12 +536,12 @@ function FearCard({
 function RelationshipsCard({
   relationships,
   delay,
-  onEdit,
+  disabled,
   onDelete,
 }: {
   relationships: ProfileRelationship[];
   delay: number;
-  onEdit: (target: MemoryEditTarget) => void;
+  disabled: boolean;
   onDelete: (profileType: EditableProfileType, id: number) => void;
 }) {
   return (
@@ -546,14 +566,7 @@ function RelationshipsCard({
                 {rel.influenceStyle && <div className="profile-item-subtle">{rel.influenceStyle}</div>}
                 {rel.note && <div className="profile-readable-text mt-2 text-[13px] text-[#6A5A4B]">{rel.note}</div>}
                 <MemoryGovernanceActions
-                  onEdit={() => onEdit({
-                    id: rel.id,
-                    profileType: 'relationship',
-                    title: rel.name,
-                    subject: rel.name,
-                    content: rel.note || rel.influenceStyle || formatInfluenceLevel(rel.influenceLevel),
-                    detail: rel.role,
-                  })}
+                  disabled={disabled}
                   onDelete={() => onDelete('relationship', rel.id)}
                 />
               </div>
@@ -568,11 +581,13 @@ function RelationshipsCard({
 function EmotionsCard({
   emotions,
   delay,
+  disabled,
   onEdit,
   onDelete,
 }: {
   emotions: ProfileEmotion[];
   delay: number;
+  disabled: boolean;
   onEdit: (target: MemoryEditTarget) => void;
   onDelete: (profileType: EditableProfileType, id: number) => void;
 }) {
@@ -599,6 +614,7 @@ function EmotionsCard({
                   </div>
                 )}
                 <MemoryGovernanceActions
+                  disabled={disabled}
                   onEdit={() => onEdit({
                     id: emotion.id,
                     profileType: 'emotion',
@@ -671,25 +687,31 @@ function DecisionsCard({ decisions, delay }: { decisions: ProfileDecision[]; del
 
 function MemoryGovernanceActions({
   danger = false,
+  disabled,
   onEdit,
   onDelete,
 }: {
   danger?: boolean;
-  onEdit: () => void;
+  disabled: boolean;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   return (
     <div className={`profile-compact-actions formal ${danger ? 'danger' : ''}`}>
-      <Button size="small" type="text" icon={<EditOutlined />} onClick={onEdit}>
-        修正
-      </Button>
+      {onEdit && (
+        <Button size="small" type="text" icon={<EditOutlined />} disabled={disabled} onClick={onEdit}>
+          修正
+        </Button>
+      )}
       <Popconfirm
         title="删除这条档案？"
         okText="删除"
         cancelText="取消"
         onConfirm={onDelete}
+        okButtonProps={{ disabled, loading: disabled }}
+        cancelButtonProps={{ disabled }}
       >
-        <Button size="small" type="text" icon={<DeleteOutlined />}>
+        <Button size="small" type="text" icon={<DeleteOutlined />} disabled={disabled}>
           删除
         </Button>
       </Popconfirm>
