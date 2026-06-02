@@ -179,16 +179,6 @@ export function ProfilePage() {
       </div>
 
       <main className="profile-page-shell">
-        <PendingMemoryPanel
-          pendingMemories={pendingMemories}
-          pendingMemoryCount={pendingMemoryCount}
-          loading={governanceLoading}
-          error={governanceError}
-          onConfirm={handleConfirmPending}
-          onReject={handleRejectPending}
-          onEdit={openEdit}
-        />
-
         <ProfileSummary
           completeness={completeness}
           completenessText={getCompletenessText()}
@@ -199,6 +189,16 @@ export function ProfilePage() {
             relationships: profile.relationships?.length ?? 0,
             decisions: profile.decisions?.length ?? 0,
           }}
+        />
+
+        <PendingMemoryPanel
+          pendingMemories={pendingMemories}
+          pendingMemoryCount={pendingMemoryCount}
+          loading={governanceLoading}
+          error={governanceError}
+          onConfirm={handleConfirmPending}
+          onReject={handleRejectPending}
+          onEdit={openEdit}
         />
 
         <div className="profile-layout">
