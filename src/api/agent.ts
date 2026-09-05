@@ -17,6 +17,8 @@ import type {
   ProfileMemoryCorrectionRequest,
   ProfileMemoryGovernanceResult,
   ProfileMemoryReasonRequest,
+  MemoryInsight,
+  MemoryInsightListResponse,
   ChatConversation,
   ChatResponse,
   PersistedChatMessage
@@ -266,6 +268,17 @@ export const profileApi = {
     }
     const query = params.toString();
     return fetchApi(`/profile/memory-audits${query ? `?${query}` : ''}`);
+  },
+
+  getInsights: (): Promise<MemoryInsightListResponse> => {
+    return fetchApi('/profile/insights');
+  },
+
+  judgeInsight: (id: number, verdict: 'confirm' | 'reject'): Promise<MemoryInsight> => {
+    return fetchApi(`/profile/insights/${id}/judge`, {
+      method: 'POST',
+      body: JSON.stringify({ verdict }),
+    });
   },
 
   confirmPendingMemory: (id: number): Promise<ProfileMemoryGovernanceResult> => {

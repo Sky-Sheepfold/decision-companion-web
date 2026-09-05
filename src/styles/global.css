@@ -1625,6 +1625,77 @@ button:disabled {
   box-shadow: 0 16px 42px rgba(106, 64, 32, 0.045);
 }
 
+/* 行为动机洞察（Insight）面板 */
+.profile-insight-panel {
+  margin-bottom: 18px;
+  border: 1px solid #E8D8C8;
+  border-radius: 16px;
+  background: #FFFDF9;
+  padding: 18px;
+  box-shadow: 0 14px 36px rgba(106, 64, 32, 0.04);
+}
+
+.profile-insight-hint {
+  margin: 0 0 12px;
+  color: #9B8069;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.profile-insight-list {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-insight-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  border: 1px solid #EDE0D4;
+  border-radius: 13px;
+  background: #FFFCF8;
+  padding: 13px;
+}
+
+.profile-insight-item.confirmed {
+  border-color: #CFE7DC;
+  background: #F4FBF7;
+}
+
+.profile-insight-main {
+  min-width: 0;
+}
+
+.profile-insight-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.profile-insight-icon {
+  color: #C8845A;
+}
+
+.profile-insight-tag.confirmed {
+  border-color: #CFE7DC !important;
+  background: #E8F5EE !important;
+  color: #0F6E56 !important;
+}
+
+.profile-insight-text {
+  margin: 0 0 6px;
+  color: #4A3C31;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.profile-insight-evidence {
+  margin-top: 4px;
+}
+
 .profile-kicker {
   margin-bottom: 8px;
   font-size: 12px;
@@ -2208,13 +2279,18 @@ button:disabled {
 
   .profile-summary,
   .profile-section-card,
-  .profile-pending-panel {
+  .profile-pending-panel,
+  .profile-insight-panel {
     border-radius: 14px;
     padding: 18px;
   }
 
   .profile-pending-head {
     align-items: center;
+  }
+
+  .profile-insight-item {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .profile-summary h1 {

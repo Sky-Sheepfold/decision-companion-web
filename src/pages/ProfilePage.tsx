@@ -14,10 +14,12 @@ import {
   EditOutlined,
   DeleteOutlined,
   CloseCircleOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
 import { useProfileStore } from '../stores/profileStore';
 import type {
   Evidence,
+  MemoryInsight,
   ProfileMemoryCandidate,
   ProfileMemoryCorrectionRequest,
   ProfileValues,
@@ -52,9 +54,14 @@ export function ProfilePage() {
     completeness,
     pendingMemories,
     pendingMemoryCount,
+    insights,
+    insightUnjudgedCount,
+    insightLoading,
     governanceLoading,
     governanceError,
     fetchProfile,
+    fetchInsights,
+    judgeInsight,
     confirmPendingMemory,
     rejectPendingMemory,
     correctPendingMemory,
@@ -67,7 +74,8 @@ export function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, [navigate, fetchProfile]);
+    fetchInsights();
+  }, [navigate, fetchProfile, fetchInsights]);
 
   function openEdit(target: MemoryEditTarget) {
     setEditingMemory(target);
@@ -96,6 +104,28 @@ export function ProfilePage() {
     try {
       await rejectPendingMemory(id, '用户不采纳');
       message.success('已不采纳');
+    } catch {
+      message.error('操作失败，请稍后重试');
+    }
+  }
+
+  async function handleConfirmInsight(id: number) {
+    if (insightLoading) return;
+
+    try {
+      await judgeInsight(id, 'confirm');
+      message.success('已确认这条洞察');
+    } catch {
+      message.error('操作失败，请稍后重试');
+    }
+  }
+
+  async function handleRejectInsight(id: number) {
+    if (insightLoading) return;
+
+    try {
+      await judgeInsight(id, 'reject');
+      message.success('已否定这条洞察');
     } catch {
       message.error('操作失败，请稍后重试');
     }
@@ -199,6 +229,14 @@ export function ProfilePage() {
           onConfirm={handleConfirmPending}
           onReject={handleRejectPending}
           onEdit={openEdit}
+        />
+
+        <InsightPanel
+          insights={insights}
+          unjudgedCount={insightUnjudgedCount}
+          loading={insightLoading}
+          onConfirm={handleConfirmInsight}
+          onReject={handleRejectInsight}
         />
 
         <div className="profile-layout">
@@ -409,6 +447,103 @@ function PendingMemoryPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function InsightPanel({
+  insights,
+  unjudgedCount,
+  loading,
+  onConfirm,
+  onReject,
+}: {
+  insights: MemoryInsight[];
+  unjudgedCount: number;
+  loading: boolean;
+  onConfirm: (id: number) => void;
+  onReject: (id: number) => void;
+}) {
+  return (
+    <section className="profile-insight-panel">
+      <div className="profile-pending-head">
+        <div>
+          <div className="profile-kicker">行为动机洞察</div>
+          <h2>{unjudgedCount > 0 ? `${unjudgedCount} 条假设等你判定` : insights.length > 0 ? '对你的理解假设' : '还在积累观察'}</h2>
+        </div>
+        {loading && <Spin size="small" />}
+      </div>
+      <p className="profile-insight-hint">
+        系统从近期对话中形成的"你为什么会这样"的解释假设。它只是假设，不是定论——你可以判定准不准，帮助它更懂你。
+      </p>
+
+      {insights.length === 0 ? (
+        <div className="profile-pending-empty">再多聊几次，这里会浮现对行为动机的理解。</div>
+      ) : (
+        <div className="profile-insight-list">
+          {insights.map((insight) => {
+            const confirmed = insight.verdict === 'confirmed';
+            const rejected = insight.verdict === 'rejected';
+
+            return (
+              <article key={insight.id} className={`profile-insight-item ${confirmed ? 'confirmed' : ''}`}>
+                <div className="profile-insight-main">
+                  <div className="profile-insight-meta">
+                    <BulbOutlined className="profile-insight-icon" />
+                    <Tag className={`profile-insight-tag ${confirmed ? 'confirmed' : ''}`}>
+                      {confirmed ? '已确认' : rejected ? '已否定' : '待验证'}
+                    </Tag>
+                    <ConfidenceBadge confidence={toNumber(insight.confidence)} />
+                  </div>
+                  <p className="profile-insight-text">{insight.hypothesis}</p>
+                  <InsightEvidence evidence={insight.evidence} />
+                </div>
+                {!confirmed && !rejected && (
+                  <div className="profile-compact-actions">
+                    <Button
+                      size="small"
+                      icon={<CheckCircleOutlined />}
+                      disabled={loading}
+                      loading={loading}
+                      onClick={() => onConfirm(insight.id)}
+                    >
+                      挺准
+                    </Button>
+                    <Popconfirm
+                      title="否定这条洞察？"
+                      okText="否定"
+                      cancelText="取消"
+                      onConfirm={() => onReject(insight.id)}
+                      okButtonProps={{ disabled: loading, loading }}
+                      cancelButtonProps={{ disabled: loading }}
+                    >
+                      <Button size="small" icon={<CloseCircleOutlined />} disabled={loading}>
+                        不准
+                      </Button>
+                    </Popconfirm>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InsightEvidence({ evidence }: { evidence?: Evidence }) {
+  const items = normalizeEvidence(evidence);
+
+  if (!items.length) return null;
+
+  return (
+    <div className="profile-insight-evidence">
+      {items.slice(0, 2).map((item, index) => (
+        <div key={`${item}-${index}`} className="profile-evidence-line">
+          依据：{item}
+        </div>
+      ))}
+    </div>
   );
 }
 

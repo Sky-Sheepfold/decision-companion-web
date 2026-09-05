@@ -126,6 +126,24 @@ export interface ProfileMemoryCorrectionRequest {
   reason?: string;
 }
 
+export interface MemoryInsight {
+  id: number;
+  userId: number;
+  hypothesis: string;
+  evidence?: Evidence;
+  confidence?: number | string | null;
+  verdict?: string | null;
+  sourceAwarenessIds?: string | null;
+  active?: boolean;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface MemoryInsightListResponse {
+  insights: MemoryInsight[];
+  unjudgedCount: number;
+}
+
 export interface UserProfile {
   user: User;
   values: ProfileValues[];

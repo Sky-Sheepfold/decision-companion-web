@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ProfileMemoryCandidate, ProfileMemoryCorrectionRequest, UserProfile } from '../types';
+import type { MemoryInsight, ProfileMemoryCandidate, ProfileMemoryCorrectionRequest, UserProfile } from '../types';
 import { ApiCode, getAuthToken, isApiError, profileApi } from '../api/agent';
 import { readSessionCache, removeSessionCache, writeSessionCache } from '../utils/sessionCache';
 
@@ -19,6 +19,9 @@ interface ProfileState {
   error: string | null;
   pendingMemories: ProfileMemoryCandidate[];
   pendingMemoryCount: number;
+  insights: MemoryInsight[];
+  insightUnjudgedCount: number;
+  insightLoading: boolean;
   governanceLoading: boolean;
   governanceError: string | null;
   completeness: number;
@@ -26,6 +29,8 @@ interface ProfileState {
   lastFetchedAt: number;
   fetchProfile: (options?: FetchProfileOptions) => Promise<void>;
   fetchPendingMemories: () => Promise<void>;
+  fetchInsights: () => Promise<void>;
+  judgeInsight: (id: number, verdict: 'confirm' | 'reject') => Promise<void>;
   confirmPendingMemory: (id: number) => Promise<void>;
   rejectPendingMemory: (id: number, reason?: string) => Promise<void>;
   correctPendingMemory: (id: number, request: ProfileMemoryCorrectionRequest) => Promise<void>;
@@ -41,6 +46,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   error: null,
   pendingMemories: [],
   pendingMemoryCount: 0,
+  insights: [],
+  insightUnjudgedCount: 0,
+  insightLoading: false,
   governanceLoading: false,
   governanceError: null,
   completeness: 0,
@@ -94,6 +102,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
             profile: null,
             pendingMemories: [],
             pendingMemoryCount: 0,
+            insights: [],
+            insightUnjudgedCount: 0,
+            insightLoading: false,
             completeness: 0,
             chatCount: parseInt(sessionStorage.getItem('chatCount') || '0', 10),
             error: null,
@@ -151,6 +162,35 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
   },
 
+  fetchInsights: async () => {
+    const token = getAuthToken();
+    const requestGeneration = profileStateGeneration;
+
+    try {
+      set({ insightLoading: true });
+      const data = await profileApi.getInsights();
+      if (!isCurrentProfileRequest(token, requestGeneration)) {
+        return;
+      }
+      set({
+        insights: data.insights ?? [],
+        insightUnjudgedCount: data.unjudgedCount ?? 0,
+        insightLoading: false,
+      });
+    } catch (err) {
+      if (!isCurrentProfileRequest(token, requestGeneration)) {
+        return;
+      }
+
+      console.error('Fetch insights error:', err);
+      set({ insightLoading: false });
+    }
+  },
+
+  judgeInsight: async (id: number, verdict: 'confirm' | 'reject') => {
+    await runInsightMutation(set, get, () => profileApi.judgeInsight(id, verdict));
+  },
+
   confirmPendingMemory: async (id: number) => {
     await runGovernanceMutation(set, get, () => profileApi.confirmPendingMemory(id));
   },
@@ -181,6 +221,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       error: null,
       pendingMemories: [],
       pendingMemoryCount: 0,
+      insights: [],
+      insightUnjudgedCount: 0,
+      insightLoading: false,
       governanceLoading: false,
       governanceError: null,
       completeness: 0,
@@ -269,6 +312,22 @@ async function runGovernanceMutation(
       governanceLoading: false,
       governanceError: '记忆更新失败，请稍后重试',
     });
+    throw err;
+  }
+}
+
+async function runInsightMutation(
+  set: (partial: ProfileState | Partial<ProfileState> | ((state: ProfileState) => ProfileState | Partial<ProfileState>)) => void,
+  get: () => ProfileState,
+  mutate: () => Promise<unknown>
+) {
+  try {
+    set({ insightLoading: true });
+    await mutate();
+    await get().fetchInsights();
+  } catch (err) {
+    console.error('Insight judge error:', err);
+    set({ insightLoading: false });
     throw err;
   }
 }
