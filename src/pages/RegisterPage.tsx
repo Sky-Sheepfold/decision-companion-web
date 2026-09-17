@@ -1,10 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App as AntApp, Button, Checkbox, Form, Input } from 'antd';
-import { ArrowRightOutlined, LockOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowRight, CircleAlert, CircleCheck, Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
 import { AuthLayout } from '../components/auth/AuthLayout';
+import { validatePassword, validateUsername } from '../components/auth/validate';
 import { getApiErrorMessage } from '../api/agent';
 import { useAuthStore } from '../stores/authStore';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface RegisterFormValues {
   username: string;
@@ -13,22 +17,66 @@ interface RegisterFormValues {
   privacyAccepted: boolean;
 }
 
+type RegisterField = 'username' | 'password' | 'confirmPassword';
+
 export function RegisterPage() {
   const navigate = useNavigate();
-  const { message } = AntApp.useApp();
   const { user, loading, register } = useAuthStore();
+  const [values, setValues] = useState<RegisterFormValues>({
+    username: '',
+    password: '',
+    confirmPassword: '',
+    privacyAccepted: false,
+  });
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RegisterField, string>>>({});
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     navigate(user.onboarded ? '/chat' : '/onboarding', { replace: true });
   }, [navigate, user]);
 
-  async function handleSubmit(values: RegisterFormValues) {
+  function validateField(field: RegisterField, next: RegisterFormValues): string | undefined {
+    if (field === 'username') return validateUsername(next.username);
+    if (field === 'password') return validatePassword(next.password);
+    if (!next.confirmPassword) return '请再次输入密码';
+    if (next.confirmPassword !== next.password) return '两次输入的密码不一致';
+    return undefined;
+  }
+
+  function handleChange(field: RegisterField, value: string) {
+    const next = { ...values, [field]: value };
+    setValues(next);
+    setFormError(null);
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: validateField(field, next) }));
+    }
+  }
+
+  function handleBlur(field: RegisterField) {
+    setFieldErrors((prev) => ({ ...prev, [field]: validateField(field, values) }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const errors: Partial<Record<RegisterField, string>> = {
+      username: validateUsername(values.username),
+      password: validatePassword(values.password),
+      confirmPassword: validateField('confirmPassword', values),
+    };
+    const privacy = values.privacyAccepted ? undefined : '请先确认你理解档案生成方式';
+    setFieldErrors(errors);
+    setPrivacyError(privacy ?? null);
+    if (errors.username || errors.password || errors.confirmPassword || privacy) return;
+
     try {
-      await register(values.username, values.password);
-      message.success('账号已创建');
+      await register(values.username.trim(), values.password);
+      setSubmitted(true);
     } catch (err) {
-      message.error(getApiErrorMessage(err, '注册失败'));
+      setFormError(getApiErrorMessage(err, '注册失败'));
     }
   }
 
@@ -40,105 +88,113 @@ export function RegisterPage() {
       switchTo="/login"
       switchLabel="直接登录"
     >
-      <Form<RegisterFormValues>
-        layout="vertical"
-        requiredMark={false}
-        onFinish={handleSubmit}
-      >
-        <Form.Item
-          label="用户名"
-          name="username"
-          rules={[
-            { required: true, message: '请输入用户名' },
-            { max: 50, message: '用户名不能超过 50 个字符' },
-            { validator: validateUsername },
-          ]}
-        >
-          <Input
-            size="large"
-            prefix={<UserOutlined className="text-[#B09880]" />}
-            placeholder="支持中文用户名"
-            autoComplete="username"
-            className="h-11"
-          />
-        </Form.Item>
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        {formError && (
+          <div className="auth-error-banner" role="alert">
+            <CircleAlert />
+            <span>{formError}</span>
+          </div>
+        )}
 
-        <Form.Item
-          label="密码"
-          name="password"
-          rules={[
-            { required: true, message: '请输入密码' },
-            { min: 8, message: '密码至少 8 位' },
-            { max: 72, message: '密码不能超过 72 位' },
-          ]}
-        >
-          <Input.Password
-            size="large"
-            prefix={<LockOutlined className="text-[#B09880]" />}
-            placeholder="至少 8 位"
-            autoComplete="new-password"
-            className="h-11"
-          />
-        </Form.Item>
+        <div className="auth-field" data-invalid={fieldErrors.username ? true : undefined}>
+          <Label htmlFor="register-username" className="sr-only">用户名</Label>
+          <div className="auth-input-wrap">
+            <User className="auth-input-icon" />
+            <Input
+              id="register-username"
+              value={values.username}
+              onChange={(event) => handleChange('username', event.target.value)}
+              onBlur={() => handleBlur('username')}
+              placeholder="用户名（支持中文）"
+              autoComplete="username"
+              aria-invalid={fieldErrors.username ? true : undefined}
+              className="auth-input"
+            />
+          </div>
+          {fieldErrors.username && <p className="auth-field-error">{fieldErrors.username}</p>}
+        </div>
 
-        <Form.Item
-          label="确认密码"
-          name="confirmPassword"
-          dependencies={['password']}
-          rules={[
-            { required: true, message: '请再次输入密码' },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('password') === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(new Error('两次输入的密码不一致'));
-              },
-            }),
-          ]}
-        >
-          <Input.Password
-            size="large"
-            prefix={<LockOutlined className="text-[#B09880]" />}
-            placeholder="再次输入密码"
-            autoComplete="new-password"
-            className="h-11"
-          />
-        </Form.Item>
+        <div className="auth-field" data-invalid={fieldErrors.password ? true : undefined}>
+          <Label htmlFor="register-password" className="sr-only">密码</Label>
+          <div className="auth-input-wrap">
+            <Lock className="auth-input-icon" />
+            <Input
+              id="register-password"
+              type={showPassword ? 'text' : 'password'}
+              value={values.password}
+              onChange={(event) => handleChange('password', event.target.value)}
+              onBlur={() => handleBlur('password')}
+              placeholder="密码（至少 8 位）"
+              autoComplete="new-password"
+              aria-invalid={fieldErrors.password ? true : undefined}
+              className="auth-input auth-input-has-trail"
+            />
+            <button
+              type="button"
+              className="auth-input-trail"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? '隐藏密码' : '显示密码'}
+            >
+              {showPassword ? <EyeOff /> : <Eye />}
+            </button>
+          </div>
+          {fieldErrors.password && <p className="auth-field-error">{fieldErrors.password}</p>}
+        </div>
 
-        <Form.Item
-          name="privacyAccepted"
-          valuePropName="checked"
-          rules={[
-            {
-              validator: (_, value) => value
-                ? Promise.resolve()
-                : Promise.reject(new Error('请先确认你理解档案生成方式')),
-            },
-          ]}
-        >
-          <Checkbox className="items-start text-[13px] leading-5 text-[#7D6958]">
-            我理解：我的对话会被用于生成个人档案，并且我可以在之后查看和修正这些理解。
-          </Checkbox>
-        </Form.Item>
+        <div className="auth-field" data-invalid={fieldErrors.confirmPassword ? true : undefined}>
+          <Label htmlFor="register-confirm" className="sr-only">确认密码</Label>
+          <div className="auth-input-wrap">
+            <Lock className="auth-input-icon" />
+            <Input
+              id="register-confirm"
+              type={showPassword ? 'text' : 'password'}
+              value={values.confirmPassword}
+              onChange={(event) => handleChange('confirmPassword', event.target.value)}
+              onBlur={() => handleBlur('confirmPassword')}
+              placeholder="再次输入密码"
+              autoComplete="new-password"
+              aria-invalid={fieldErrors.confirmPassword ? true : undefined}
+              className="auth-input"
+            />
+          </div>
+          {fieldErrors.confirmPassword && <p className="auth-field-error">{fieldErrors.confirmPassword}</p>}
+        </div>
 
-        <Button
-          type="primary"
-          htmlType="submit"
-          size="large"
-          loading={loading}
-          icon={<ArrowRightOutlined />}
-          iconPlacement="end"
-          className="h-11 w-full !rounded-lg bg-[#C8845A] font-medium hover:!bg-[#A06040]"
-        >
-          创建我的决策伙伴
+        <div className="auth-field" data-invalid={privacyError ? true : undefined}>
+          <label className="auth-check auth-check-multiline" htmlFor="register-privacy">
+            <Checkbox
+              id="register-privacy"
+              checked={values.privacyAccepted}
+              onCheckedChange={(checked) => {
+                setValues((prev) => ({ ...prev, privacyAccepted: checked === true }));
+                setPrivacyError(null);
+              }}
+              aria-invalid={privacyError ? true : undefined}
+            />
+            <span>我理解：我的对话会被用于生成个人档案，并且我可以在之后查看和修正这些理解。</span>
+          </label>
+          {privacyError && <p className="auth-field-error">{privacyError}</p>}
+        </div>
+
+        <Button type="submit" size="lg" disabled={loading || submitted} className="auth-submit">
+          {loading ? (
+            <>
+              <Loader2 className="animate-spin" />
+              正在创建...
+            </>
+          ) : submitted ? (
+            <>
+              <CircleCheck />
+              已创建，正在进入...
+            </>
+          ) : (
+            <>
+              创建我的决策伙伴
+              <ArrowRight />
+            </>
+          )}
         </Button>
-      </Form>
+      </form>
     </AuthLayout>
   );
-}
-
-function validateUsername(_: unknown, value?: string) {
-  if (!value || !/[\s/\\]/.test(value.trim())) return Promise.resolve();
-  return Promise.reject(new Error('用户名不能包含空白字符、斜杠或反斜杠'));
 }

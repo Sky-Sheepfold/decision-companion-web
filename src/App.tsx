@@ -54,7 +54,7 @@ function AppRoutes() {
 
   if (!ready) {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#FAFAF8]">
+      <div className="flex min-h-[100dvh] items-center justify-center" style={{ background: 'linear-gradient(180deg, #FFFDF9 0%, #F8F3ED 100%)' }}>
         <Spin size="large" description="正在确认登录状态..." />
       </div>
     );
